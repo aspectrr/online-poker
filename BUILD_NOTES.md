@@ -218,3 +218,46 @@ int64 cents everywhere. No floats, ever.
 ## Tests
 
 `go test ./...` in `server/`. Table-driven: min-raise legality, reopen rules, side pot construction, odd chip, RIT halves (+side pots), bomb pot flow, 7-2 (showdown/reveal/muck), trigger matching, evaluator categories/comparisons/PLO 2-from-hand, plus 300 random hands × 6 configs asserting chip conservation and termination.
+# BUILD NOTES — ASPTR-181: WebSocket gateway + client store
+
+Server `server/` + frontend `web/`. New dep: `github.com/coder/websocket` (Go). Zero frontend deps added.
+
+## Server layout
+
+- **`internal/ws/ws.go`** — connection pumps only. `Upgrade(w,r,userID,onMsg,onClose)`: read pump JSON-decodes `ClientMsg` → injected handler; write pump drains a 64-msg buffered chan. `TrySend` never blocks: full buffer = message dropped (slow client degrades, not killed). `shutdown` guarded by mutex + closed flag — **send chan is never closed**; closing it raced in-flight broadcasts (found in e2e: `panic: send on closed channel`). `NewTestClient`/`RecvMsgs` test hooks.
+- **`internal/protocol/wire.go`** — wire types: `ClientMsg` (join{seat,name} | leave | action{kind fold/check/call/bet, amount raise-TO} | chat | rabbit{reveal?}), `ServerMsg` (state | event | seats | action_required | post_hand | chat | error), `TableState` snapshot, `SeatWire`, `ConfigWire`, `PostHandPrompt`. Mirrors engine types via `protocol/event.go` aliases.
+- **`internal/table/`** — actor-per-table: ONE goroutine owns all mutable state (seats, runner, timers); everything else talks through the buffered inbox chan. `table.go` dispatch, `hands.go` hand lifecycle + events + redaction + timeouts, `view.go` snapshots/seat wire, `manager.go` lazy table registry from store rows.
+  - Hand start: ≥2 seated → 3s delay (fills) → engine `StartHand`. Next hand after `InterHandDelaySecs`. Button rotates to next occupied seat.
+  - Events: `hand_started` broadcast to ALL; private `holes_dealt` per seat via `HolesFor` (engine accessor added — transport owns private delivery, engine events are public-only). `showdown` hole reveals are public by design.
+  - Timeout: timer per turn → auto check when free, else fold. Post-hand prompt (7-2 reveal / rabbit) also times out → muck/skip.
+  - Reconnect: same userID on upgrade re-adopts the seat + gets full snapshot (own holes via `lastHoles`, board, pot, legal actions if on turn).
+  - Persist: `hand_ended` → `{hand_no, events[], stacks}` jsonb → `store.InsertHand` (nil store = dev no-op).
+  - Illegal actions: error to actor, state unchanged. Chat ≤500 chars, broadcast with seat/name.
+- **`cmd/server/main.go`** — `POST /api/tables` (auth, store.CreateTable), `GET /api/tables`, `GET /api/tables/{id}`, `GET /api/tables/{id}/ws` (auth via `?token=` — auth.Middleware already reads query param; upgrade → table Attach). Env: PORT, SUPABASE_URL, SUPABASE_ANON_KEY, DATABASE_URL.
+
+## Engine additions
+
+`HolesFor(seat)`, `Board()`, `Pot()` read accessors — transport snapshot/private-delivery needs. No semantic changes.
+
+## Frontend
+
+- **`src/lib/protocol.ts`** — mirrored wire types (tagged unions), `Card = number` + `cardRank/cardSuit` helpers.
+- **`src/lib/ws.ts`** — `TableSocket`: typed send/receive, auto-reconnect exp backoff (500ms·2^n cap 30s + jitter), token rides `?token=`.
+- **`src/stores/table.ts`** — solid signals store: `state/seats/board/pot/myCards/toAct/deadline/postHand/chat/events/status/error`. Reducer folds server msgs: state snapshot resets view; events increment (`street_dealt` appends board, `hand_ended` syncs stacks, `holes_dealt` only honors own-seat delivery).
+- **`src/pages/Table.tsx`** — `/table/:id`: pot + board, seat grid w/ dealer button + last action, your-cards + action bar (fold/check/call X/raise-to min), seat picker, post-hand reveal/muck/rabbit, rolling event log, connection status chip. Mock mode → hint card (no backend). Lobby Join → `navigate(/table/:id)`; dead `joinTable` REST stub left for seatsFilled later.
+- `erasableSyntaxOnly` tsconfig: no constructor parameter-properties — explicit field assignment in `TableSocket`.
+
+## Tests
+
+- `internal/table/table_test.go` — broadcast (chat + seat join reach all), redaction (B gets only seat-1 holes_dealt, A only seat-0; snapshot YourCards per viewer), timeout auto-action (fold HU ends hand uncontested; free-check times out to check not fold).
+- `internal/ws/e2e_test.go` — real websocket dial ×2 over httptest, fake auth middleware: both join, hand auto-starts, holes arrive, B receiving wrong seat's holes fails the test. Dedicated reader goroutine per conn (sequential interleaved polling starved one side — false negative).
+- `go test ./...` green; `tsc -b` + `vite build` green (212.6K js / 34.0K css).
+
+## Known gaps (next)
+
+- `joinTable` REST stub unused; lobby `seatsFilled` not live (needs REST read of table actor state or lobby WS).
+- Timeout auto-action legality edge: timeout fires for stale seat if action changed exactly at deadline — guarded by `la.Seat != timeoutSeat` check, benign.
+- Post-hand prompt approximates bounty/rabbit offer from config (engine doesn't expose which is pending); worst case client sees an offer the engine won't act on → illegal-action error. Acceptable for friends-table v1.
+- Reconnect mid-hand gets snapshot but not the hand's event history (board/pot only). Fine for v1.
+- Dead conn detection is write-failure based; no app-level ping. coder/websocket pings from client side suffice.
+

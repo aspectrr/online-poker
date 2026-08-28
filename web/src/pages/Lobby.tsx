@@ -1,5 +1,5 @@
-import { For, Show, createResource, createSignal } from 'solid-js'
-import { A } from '@solidjs/router'
+import { For, Show, createResource } from 'solid-js'
+import { A, useNavigate } from '@solidjs/router'
 import { Button } from '../components/ui/Button'
 import { CreateTableDialog } from '../components/CreateTableDialog'
 import { MOCK_MODE, joinTable, listTables } from '../lib/api'
@@ -9,12 +9,11 @@ import { cn } from '../lib/cn'
 
 export function LobbyPage() {
   const [tables, { refetch }] = createResource(listTables)
-  const [joined, setJoined] = createSignal<string | null>(null)
+  const navigate = useNavigate()
 
   const onJoin = async (t: TableSummary) => {
     await joinTable(t.id)
-    setJoined(t.id)
-    // ponytail: no table route yet — ack join inline; navigate when /table/:id exists.
+    navigate(`/table/${t.id}`)
   }
 
   return (
@@ -78,7 +77,7 @@ export function LobbyPage() {
         >
           <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <For each={tables.latest}>
-              {(t) => <TableCard table={t} joined={joined() === t.id} onJoin={() => onJoin(t)} />}
+              {(t) => <TableCard table={t}  onJoin={() => onJoin(t)} />}
             </For>
           </div>
         </Show>
@@ -97,7 +96,7 @@ function TableSkeleton() {
   )
 }
 
-function TableCard(props: { table: TableSummary; joined: boolean; onJoin: () => void }) {
+function TableCard(props: { table: TableSummary; onJoin: () => void }) {
   const t = () => props.table
   const full = () => t().seatsFilled >= t().maxSeats
   return (
@@ -150,8 +149,8 @@ function TableCard(props: { table: TableSummary; joined: boolean; onJoin: () => 
           when={!full()}
           fallback={<span class="text-sm font-medium text-danger">Full</span>}
         >
-          <Button size="sm" variant={props.joined ? 'outline' : 'default'} onClick={props.onJoin}>
-            {props.joined ? 'Seated ✓' : 'Join'}
+          <Button size="sm" variant="default" onClick={props.onJoin}>
+            Join
           </Button>
         </Show>
       </div>

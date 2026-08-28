@@ -13,6 +13,7 @@ type EventType = engine.EventType
 
 const (
 	EvHandStarted      = engine.EvHandStarted
+	EvHolesDealt       = engine.EvHolesDealt
 	EvBlindsPosted     = engine.EvBlindsPosted
 	EvAntesPosted      = engine.EvAntesPosted
 	EvStreetDealt      = engine.EvStreetDealt
