@@ -1,3 +1,37 @@
+# BUILD NOTES — ASPTR-189: Cards + animations (frontend)
+
+All in `web/`. Reuses ASPTR-182 tokens (felt green/gold) + `cn`/cva conventions. No new deps.
+
+## Components (`src/components/cards/`)
+
+- **`Card.tsx`** — playing card, `role="img"` + aria-label (`"K of diamonds"`). 4-color suits: s `#1a1a1a`, h `#d33`, d `#3377dd`, c `#2a8a3a` (exact spec colors). Suits are SVG paths in a 100×100 viewBox (spade, heart, diamond, club w/ stem). Ranks 2–10: corner index (top-left + rotated bottom-right, font-display bold) + pip grid — side columns at x=0.32/0.68, center pips per-rank (`CENTER_PIPS`), lower-half pips rotated 180° (`FLIP_ROWS`); 2/3 are single-center-column layouts. JQKA: letter (2.5em) over big suit glyph centered. Card body: white, `rounded-lg`, subtle black border + two-layer shadow. Sizes sm 56×80 / md 88×124 / lg 112×157 with fontSize 22/30/38 driving pip scale. `CardBack` = felt lattice SVG pattern (green grid + gold dots, gold border frame) — `pattern id` is shared per document, fine since identical.
+- **`CardRow.tsx`** — row of `{rank, suit, win?}` specs, gap variants tight/default/loose. 3D flip: outer wrapper has `[perspective:900px]`, inner `preserve-3d` div toggles `rotateY(180deg)` (500ms); face + back are siblings with `backface-visibility:hidden`, back pre-rotated 180°. `faceDownCount` / `revealed=false` control state. `dealDelay(i, ms)` helper returns `{animation-delay}` style for stagger.
+- No card-in-card abstraction for court art — letter+suit reads clean at poker sizes; real court illustrations can slot into the same `isCourt()` branch later.
+
+## Animations (`src/styles/animations.css`, appended)
+
+- `deal-in` — slide from top-left deck origin (`translate(-60vw,-18vh) rotate(-24deg) scale(.85)`) + fade, 480ms spring-out curve. `.animate-deal` + per-card `animation-delay`.
+- `win-pulse` — gold box-shadow pulse (1px→2px ring + 18px→30px glow), 1.1s infinite. Applied via `.card-win` on flip wrapper (ring wraps whole card incl. radius).
+- `chip-fly` — translate by `--chip-x`/`--chip-y` CSS vars + fade + scale down, 900ms forwards. Demo sets vars inline per chip.
+- `.chip` — 34px poker chip: `repeating-conic-gradient` edge stripes, white border, dashed inner ring. Red (danger token) base.
+- flip itself = transition on the wrapper (no keyframe needed).
+
+## Demo route `/cards` (`src/pages/Cards.tsx`)
+
+Playground (felt-table panel): hero hole cards (As Ks) w/ flip button, 5-card board deal w/ 110ms stagger + empty dashed slots + pot label, win-pulse toggle (board cards glow), ship-pot (6 chips fly up w/ 70ms stagger). Full 52-deck grid (13 cols, deal-in stagger 40ms). Sizes & back section (sm/md/lg face + faceDown). Header links back to `/`.
+
+## Verification
+
+- `tsc -b` + `vite build` green (210kB js / 33.6kB css gz ~68kB+7kB).
+- Interactive pass via chrome-devtools on dev server: deck grid 52 cards rendered; pip counts verified per rank (2→4 svgs incl. 2 corner suits, …, 10→12; found + fixed 9 missing center pip and 10 needing two center pips during this check); flip toggles `matrix3d` rotateY 180°; `animationName` `win-pulse`/`chip-fly` active on toggles; console clean.
+- Geometry: pip centers land on spec fractions (measured bounding rects), court letter+suit fits card (122px content in 124px card).
+
+## Not touched / next
+
+`server/`, lobby pages. Next consumer: table view — compose CardRow + deal/flip/win/chip animations there; chip-fly origin/target should be measured element-to-element (demo uses fixed vars).
+
+---
+
 # BUILD NOTES — ASPTR-179: Supabase schema + store layer
 
 ## What shipped
