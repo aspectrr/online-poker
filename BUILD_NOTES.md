@@ -1,31 +1,35 @@
-# BUILD NOTES — ASPTR-180: Magic-link auth + JWT validation
+# BUILD NOTES — ASPTR-179: Supabase schema + store layer
 
-## How auth works
+## What shipped
 
-1. Web client calls Supabase `signInWithOtp` (magic link). User clicks the link, Supabase issues a signed RS256 JWT (access token) with `sub` = user id.
-2. Go server validates the JWT against Supabase's JWKS (`SUPABASE_URL/auth/v1/.well-known/jwks.json`), checking signature, issuer (`SUPABASE_URL/auth/v1`), audience (`SUPABASE_ANON_KEY`), and expiry. Keys are cached in memory (refreshed at most once/min, re-fetched on unknown `kid`).
-3. `auth.Validator.Middleware(h)` guards HTTP routes. Token comes from `Authorization: Bearer <jwt>` or `?token=` (WebSocket handshake — browsers can't set WS headers). Handlers read the user id via `auth.UserID(ctx)`.
-4. Profile rows live in `public.users` (migration `supabase/migrations/0001_init.sql`), keyed to `auth.users`. RLS: authenticated can read; only the service role (server, via PostgREST/service connection) writes.
+- `supabase/migrations/0002_tables.sql` — `game_tables` (uuid pk, name, game_type, config jsonb, created_by → public.users, created_at) and `hands` (bigserial pk, table_id → game_tables on delete cascade, hand_no, data jsonb, created_at). Index `(table_id, hand_no)` for ListHands.
+- `server/internal/store/store.go` — `TableConfig` struct (jsonb wire format, see below), `GameTable`/`Hand` rows, `Store` with `CreateTable`, `ListTables`, `GetTable`, `InsertHand`, `ListHands(tableID, limit)`, plus `ErrNotFound`.
+- `server/internal/store/store_test.go` — 39 tests: validation table-driven OK/error cases, defaults, JSON round-trip. Plain unit tests, no DB required.
 
-Package: `server/internal/auth` — `auth.New(supabaseURL, anonKey)` → `*Validator` with `.Middleware(h http.Handler)` and `.Validate(token) (uid, err)`.
+## pgx over GORM — why
 
-## Env vars
+Five methods, all single-table CRUD with jsonb payloads. pgx/v5 + pgxpool: no ORM reflection on the hot hand-insert path, jsonb scans straight into `[]byte`, SQL is visible and reviewable. GORM would add a dependency tree to map 2 tables. Revisit only if query surface grows joins/aggregations.
 
-| Var | Local dev value | Use |
-|---|---|---|
-| `SUPABASE_URL` | `http://localhost:54321` | JWKS fetch, issuer check |
-| `SUPABASE_ANON_KEY` | from `supabase status` | audience check |
+## RLS
 
-Server reads them at startup (`auth.New`); missing/invalid URL fails fast.
+Same pattern as 0001: authenticated SELECT policy, no write policies → writes only via service role (RLS-exempt, from Go). Migration also includes explicit GRANTs — hosted Supabase does this via default privileges but local `supabase db start` does not, so without them local RLS tests fail at permission, not policy. Sequence grant needed for hands_id_seq usage.
 
-## Local flow
+Verified locally: `supabase db start` + lint clean + authenticated role can read but not insert; service role path exercised via direct inserts. Stopped db after.
 
-See `server/README.md`. Short version: `supabase start`, POST `/auth/v1/otp`, pick up the magic link from Studio's auth inbox (localhost:54323/auth/inbox), extract access_token, call server with Bearer header.
+## Config validation
 
-## Tests
+In Go (`TableConfig.Validate`), not SQL — engine consumes it, error messages surface to API callers.
 
-`server/internal/auth/auth_test.go` — mock JWKS via `httptest` + locally generated RSA key. Covers: valid token, forged signature, wrong audience/issuer, expired, missing, header vs query param, context helper.
+- `blinds_sb_bb`: `[sb, bb]` cents, both > 0, sb ≤ bb. (Spec said single int64 but sb≤bb check needs both — went with 2-elem array matching the JSON shape.)
+- `action_timeout_s`, `inter_hand_delay_s`: 5–300
+- `rit`: never | always (default never)
+- `bomb_pot_mode`: off | manual | trigger (default off); trigger mode requires ≥1 trigger
+- triggers: rank 2–14 required, suit 0–3 or null, color red|black or null
+- `seven_deuce_bounty`, `bomb_pot_antes`: ≥ 0
+- `max_seats`: 1–22, default 9 (default applied in `ApplyDefaults`, so 0 is valid input)
+- `ApplyDefaults` fills rit/bomb_pot_mode/max_seats so callers can send partial config; call before `Validate`.
 
 ## Not touched
 
-`engine/` (owned by another agent), `web/` beyond this note: web should use `supabase-js signInWithOtp({ email, options: { shouldCreateUser: true } })` and attach the session access_token to WS connects as `?token=`.
+- No seed data, no Supabase client in web/ — table listing UI comes with the API ticket.
+- Hand `data` jsonb schema unvalidated — engine team owns that shape; store passes raw JSON through.
