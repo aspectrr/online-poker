@@ -6,3 +6,7 @@ supabase/.branches
 supabase/.temp
 server/server
 .DS_Store
+
+# Pix Agent
+.pi/
+.pi-lens/
