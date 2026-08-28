@@ -1,0 +1,16 @@
+/* Dialog/select enter animations (Tailwind v4 has no tailwindcss-animate by default) */
+@keyframes in-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes in-pop {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes in-menu {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-in-fade { animation: in-fade 150ms ease-out; }
+.animate-in-pop { animation: in-pop 180ms cubic-bezier(0.16, 1, 0.3, 1); }
+.animate-in-menu { animation: in-menu 120ms ease-out; transform-origin: top; }
