@@ -247,6 +247,20 @@ func (r *HandRunner) postBlind(idx int, amount int64) {
 // Table layer matches BombPotCardTriggers against this between hands.
 func (r *HandRunner) DealtCards() []Card { return r.dealt }
 
+// HolesFor: a seat's private hole cards, for per-seat delivery by the
+// transport. Nil when the seat isn't in this hand. Copy: callers must not
+// mutate engine state.
+func (r *HandRunner) HolesFor(seat int) []Card {
+	for _, p := range r.players {
+		if p.seat == seat {
+			out := make([]Card, len(p.hole))
+			copy(out, p.hole)
+			return out
+		}
+	}
+	return nil
+}
+
 // AnyTriggerMatch reports whether any trigger matches any dealt card.
 func AnyTriggerMatch(triggers []CardTrigger, cards []Card) bool {
 	for _, c := range cards {
@@ -298,3 +312,16 @@ func (r *HandRunner) Stacks() []FinalStack {
 	}
 	return out
 }
+
+// Board: copy of the current board(s) for snapshot rendering.
+// board[0] main, board[1] second (RIT / bomb pot).
+func (r *HandRunner) Board() [][]Card {
+	out := make([][]Card, len(r.board))
+	for i, b := range r.board {
+		out[i] = append([]Card(nil), b...)
+	}
+	return out
+}
+
+// Pot: total chips in play this hand.
+func (r *HandRunner) Pot() int64 { return r.potTotal() }
