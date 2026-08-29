@@ -1,16 +1,11 @@
 import { For, Show, createSignal } from 'solid-js'
 import { A } from '@solidjs/router'
 import { Button } from '../components/ui/Button'
-import { Card, RANKS, SUITS, type Rank, type Suit } from '../components/cards/Card'
+import { Card, RANKS, SUITS, type Rank } from '../components/cards/Card'
 import { CardRow, dealDelay, type CardSpec } from '../components/cards/CardRow'
+import { RabbitMark } from '../components/cards/RabbitMark'
 
-function cardId(r: Rank, s: Suit) {
-  return `${r}${s}`
-}
-
-// satisfy lint: used by future keyed For; kept for consumers needing stable ids
-void cardId
-
+const PIP_RANKS: Rank[] = ['2', '3', '4', '5', '6', '7', '8', '9', '10']
 /** deterministic-ish demo hands */
 const HERO_HOLE: CardSpec[] = [
   { rank: 'A', suit: 's' },
@@ -41,7 +36,6 @@ export function CardsPage() {
   }
 
   const flipHole = () => setRevealed((v) => !v)
-
   const pulseWin = () => setWinners((v) => !v)
 
   const flyChips = () => {
@@ -68,7 +62,7 @@ export function CardsPage() {
             <span class="font-display text-base font-bold tracking-tight text-fg">aspectrr</span>
           </A>
           <span class="rounded-pill border border-line bg-surface px-2.5 py-0.5 text-xs font-medium text-fg-muted">
-            /cards · ASPTR-189
+            /cards · ASPTR-195
           </span>
         </div>
       </header>
@@ -145,23 +139,77 @@ export function CardsPage() {
           </div>
         </section>
 
+        {/* ---- corner legibility at sm (the acceptance bar) ---- */}
+        <section>
+          <h2 class="font-display text-xl font-bold tracking-tight text-fg">Corner legibility · sm &amp; 40px</h2>
+          <p class="mt-1 text-sm text-fg-muted">
+            Rank readable at a glance — sm (56×80) and a 40px-height card. If the corner fails here, it fails.
+          </p>
+          <div class="mt-5 space-y-5 rounded-2xl border border-line bg-surface p-6">
+            <div class="flex flex-wrap items-end gap-1.5">
+              <For each={RANKS}>
+                {(rank) => <Card rank={rank} suit="s" size="sm" />}
+              </For>
+            </div>
+            <div class="flex flex-wrap items-end gap-1">
+              <For each={RANKS}>
+                {(rank) => (
+                  <div class="h-10 w-[28.6px] [&>div]:!h-10 [&>div]:!w-[28.6px]">
+                    <Card rank={rank} suit="h" />
+                  </div>
+                )}
+              </For>
+            </div>
+          </div>
+        </section>
+
+        {/* ---- pip layout showcase ---- */}
+        <section>
+          <h2 class="font-display text-xl font-bold tracking-tight text-fg">Pip layouts</h2>
+          <p class="mt-1 text-sm text-fg-muted">Traditional French positions per rank, one suit column each — bottom-half pips mirrored.</p>
+          <div class="mt-5 grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-3">
+            <For each={PIP_RANKS}>
+              {(rank, i) => (
+                <div class="animate-deal" style={dealDelay(i(), 50)}>
+                  <Card rank={rank} suit={SUITS[i() % 4]} />
+                </div>
+              )}
+            </For>
+          </div>
+        </section>
+
+        {/* ---- courts + aces showcase ---- */}
+        <section>
+          <h2 class="font-display text-xl font-bold tracking-tight text-fg">Courts &amp; aces</h2>
+          <p class="mt-1 text-sm text-fg-muted">
+            K bear · Q turtle · J hawk — flat character-mark style. Aces: one designed glyph, ring for negative space.
+          </p>
+          <div class="mt-5 flex flex-wrap gap-3">
+            <For each={SUITS}>
+              {(suit) => (
+                <For each={['K', 'Q', 'J', 'A'] as Rank[]}>
+                  {(rank) => <Card rank={rank} suit={suit} />}
+                </For>
+              )}
+            </For>
+          </div>
+        </section>
+
         {/* ---- 52-card deck grid ---- */}
         <section>
           <div class="flex items-end justify-between gap-4">
             <div>
               <h2 class="font-display text-xl font-bold tracking-tight text-fg">Full deck</h2>
-              <p class="mt-1 text-sm text-fg-muted">All 52 — 4-color: spades black, hearts red, diamonds blue, clubs green.</p>
+              <p class="mt-1 text-sm text-fg-muted">All 52 — cream faces, pastel suits, crimson lattice backs.</p>
             </div>
             <span class="text-xs text-fg-muted">52 cards, 4 suits × 13 ranks</span>
           </div>
           <div class="mt-5 grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-3">
-            <For each={SUITS}>
-              {(suit) => (
-                <For each={RANKS}>
-                  {(rank, i) => (
-                    <div class="animate-deal" style={dealDelay(i(), 40)}>
-                      <Card rank={rank} suit={suit} />
-                    </div>
+            <For each={RANKS}>
+              {(rank) => (
+                <For each={SUITS}>
+                  {(suit) => (
+                    <Card rank={rank} suit={suit} />
                   )}
                 </For>
               )}
@@ -169,10 +217,10 @@ export function CardsPage() {
           </div>
         </section>
 
-        {/* ---- sizes + backs ---- */}
+        {/* ---- sizes, back, rabbit ---- */}
         <section>
-          <h2 class="font-display text-xl font-bold tracking-tight text-fg">Sizes &amp; back</h2>
-          <p class="mt-1 text-sm text-fg-muted">sm / md / lg, and the felt-lattice back.</p>
+          <h2 class="font-display text-xl font-bold tracking-tight text-fg">Sizes, back &amp; rabbit</h2>
+          <p class="mt-1 text-sm text-fg-muted">sm / md / lg, crimson lattice back, and the RabbitMark mascot (rabbit-hunt toasts).</p>
           <div class="mt-5 flex flex-wrap items-end gap-8 rounded-card border border-line bg-surface p-8">
             <Card rank="A" suit="s" size="sm" />
             <Card rank="K" suit="h" size="md" />
@@ -180,6 +228,12 @@ export function CardsPage() {
             <Card faceDown size="sm" />
             <Card faceDown size="md" />
             <Card faceDown size="lg" />
+            <div class="flex items-center gap-3 pb-2">
+              <RabbitMark size={24} />
+              <RabbitMark size={32} />
+              <RabbitMark size={48} />
+              <span class="text-xs text-fg-muted">RabbitMark</span>
+            </div>
           </div>
         </section>
       </main>

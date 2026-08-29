@@ -251,3 +251,20 @@ Design source of truth: `DESIGN.md` at repo root. Verified via headless Chrome c
 ### Env note
 
 `web/node_modules` was absent in this worktree — `bun install --frozen-lockfile` restored; build (`tsc -b && vite build`) green after. Disk hit 100% mid-session and killed dev servers twice; keep an eye on it.
+
+---
+
+## Cards (ASPTR-195)
+
+`web/src/components/cards/` — rebuilt card visuals, same component API (`Card` rank/suit/size/faceDown, `CardFace`, `CardBack`, `CardRow`, `RANKS`/`SUITS`/`SUIT_COLOR`), so table-ui consumes unchanged.
+
+- **Faces**: cream `#fdf9f0`, 12px radius, hairline `rgba(0,0,0,0.10)`. All art is one SVG per face (`viewBox 0 0 100 140`) in `art.tsx` — scales crisply to any size.
+- **Corner indices**: bold rank (font 28, `10` compressed to 17) + suit glyph, ink = suit color darkened to AA-on-cream (`SUIT_INK`: 13.9/5.4/5.9/5.6 :1) + 0.9u stroke/paint-order fattening. Legibility verified at sm (56×80) and 40px-height strips on /cards.
+- **Pips**: `PIP_TABLE` in `art.tsx` — explicit per-rank station table, traditional French layouts, bottom-half pips rotated 180°. Geometry verified overlap-free (script-checked across the full 52).
+- **Courts**: animal bust portraits in arched panels — K bear w/ crown, Q turtle w/ tiara, J hawk w/ cap. Main fills use `SUIT_INK` (rich), gold (`#d9a441`) + cream accents.
+- **Aces**: single large glyph (68% of width) — negative space is the design.
+- **Back**: crimson `#a8103f`, gold lattice, cream double frame, center medallion.
+- **`RabbitMark`** (`RabbitMark.tsx`): flat rabbit-face mascot for rabbit-hunt toasts.
+- **Demo** `/cards`: playground (deal/flip/win/chip), corner-legibility strip (sm + 40px), pip showcase, courts+aces, full deck, sizes/back/rabbit.
+
+Known simplifications: system font stack renders corner ranks (Sora not loaded); Vision-OCR can't grade isolated single glyphs, so corner legibility was verified by pixel inspection + geometry, not OCR.
