@@ -5,13 +5,18 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '../../lib/cn'
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]',
+  'inline-flex items-center justify-center gap-2 rounded-btn text-sm font-medium whitespace-nowrap transition-colors duration-200 ease-out disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]',
   {
     variants: {
       variant: {
-        default: 'bg-accent text-accent-fg hover:bg-accent-hover active:bg-accent shadow-sm',
-        outline: 'border border-line bg-transparent text-fg hover:bg-surface-raised',
-        ghost: 'bg-transparent text-fg-muted hover:bg-surface-raised hover:text-fg',
+        // Primary CTA — filled notion blue, the only chromatic fill (DESIGN.md)
+        default: 'bg-accent text-accent-fg hover:bg-accent-hover active:bg-accent-hover',
+        // Ghost CTA — sky tint bg, blue text (DESIGN.md)
+        ghost: 'bg-accent-tint text-accent hover:bg-[#d6ecfc] active:bg-[#d6ecfc]',
+        // Ghost text — transparent, ink 95% (DESIGN.md)
+        text: 'bg-transparent text-fg hover:bg-surface-raised',
+        // Outlined text — 1px ink-90 border, radius 4 (DESIGN.md)
+        outline: 'border border-black/90 bg-transparent text-fg/90 hover:bg-surface-raised rounded-small',
         danger: 'bg-danger text-white hover:opacity-90',
       },
       size: {

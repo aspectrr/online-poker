@@ -7,6 +7,9 @@ import { blinds, money } from '../lib/money'
 import type { TableSummary } from '../lib/types'
 import { cn } from '../lib/cn'
 
+// Seat pip hues — rotate the Notion accent cast (DESIGN.md)
+const PIP_HUES = ['bg-sky-wash', 'bg-marigold', 'bg-coral', 'bg-accent', 'bg-midnight']
+
 export function LobbyPage() {
   const [tables, { refetch }] = createResource(listTables)
   const [joined, setJoined] = createSignal<string | null>(null)
@@ -18,11 +21,11 @@ export function LobbyPage() {
   }
 
   return (
-    <div class="min-h-dvh felt-bg">
-      <header class="border-b border-line/60 bg-bg/70 backdrop-blur-md sticky top-0 z-40">
+    <div class="min-h-dvh bg-bg">
+      <header class="sticky top-0 z-40 border-b border-line bg-surface/90 backdrop-blur-md shadow-[0px_0.7px_1.462px_0px_rgb(0_0_0/0.015),0px_3px_9px_0px_rgb(0_0_0/0.03)]">
         <div class="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
           <A href="/" class="flex items-center gap-2.5">
-            <span class="grid size-8 place-items-center rounded-lg bg-accent/15 text-accent ring-1 ring-accent/30">
+            <span class="grid size-8 place-items-center rounded-btn bg-accent-tint text-accent">
               <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                 <path d="M4 9c5.5 0 10.5-2 16-2v10c-5.5 0-10.5 2-16 2V9Z" />
                 <path d="M4 11c1.5 0 2.5 1 2.5 2S5.5 15 4 15" />
@@ -34,7 +37,7 @@ export function LobbyPage() {
           </A>
           <div class="flex items-center gap-3">
             <Show when={MOCK_MODE}>
-              <span class="hidden rounded-full border border-line bg-surface px-2.5 py-0.5 text-xs font-medium text-fg-muted sm:inline">
+              <span class="hidden rounded-pill border border-line bg-surface px-2.5 py-0.5 text-xs font-medium text-fg-muted sm:inline">
                 mock data
               </span>
             </Show>
@@ -69,7 +72,7 @@ export function LobbyPage() {
           when={!tables.loading && tables.latest?.length}
           fallback={
             <Show when={!tables.loading} fallback={<TableSkeleton />}>
-              <div class="mt-10 grid place-items-center rounded-2xl border border-dashed border-line bg-surface/40 px-6 py-16 text-center">
+              <div class="mt-10 grid place-items-center rounded-card border border-dashed border-black/15 bg-surface px-6 py-16 text-center">
                 <p class="font-medium text-fg">No tables yet</p>
                 <p class="mt-1 text-sm text-fg-muted">Deal yourself in — create the first table.</p>
               </div>
@@ -91,7 +94,7 @@ function TableSkeleton() {
   return (
     <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {Array.from({ length: 6 }, (_, i) => (
-        <div data-i={i} class="h-44 animate-pulse rounded-2xl border border-line bg-surface/60" />
+        <div data-i={i} class="h-44 animate-pulse rounded-card border border-line bg-surface" />
       ))}
     </div>
   )
@@ -101,15 +104,15 @@ function TableCard(props: { table: TableSummary; joined: boolean; onJoin: () => 
   const t = () => props.table
   const full = () => t().seatsFilled >= t().maxSeats
   return (
-    <article class="group flex flex-col rounded-2xl border border-line bg-surface p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-lg hover:shadow-black/30">
+    <article class="group flex flex-col rounded-card border border-line bg-surface p-5 transition-[border-color] duration-200 ease-out hover:border-black/20">
       <div class="flex items-start justify-between gap-3">
         <h2 class="font-display text-base font-semibold leading-tight text-fg">{t().name}</h2>
         <span
           class={cn(
-            'flex-none rounded-md px-2 py-0.5 text-[11px] font-bold tracking-wider',
+            'flex-none rounded-pill px-2 py-0.5 text-[11px] font-semibold tracking-wide',
             t().gameType === 'PLO4'
-              ? 'bg-accent/15 text-accent ring-1 ring-accent/30'
-              : 'bg-surface-raised text-fg-muted ring-1 ring-line',
+              ? 'bg-marigold text-black'
+              : 'bg-surface-raised text-fg-muted',
           )}
         >
           {t().gameType}
@@ -134,8 +137,8 @@ function TableCard(props: { table: TableSummary; joined: boolean; onJoin: () => 
           {(_, i) => (
             <span
               class={cn(
-                'h-1.5 flex-1 rounded-full transition-colors',
-                i() < t().seatsFilled ? 'bg-accent/80' : 'bg-surface-raised',
+                'h-1.5 flex-1 rounded-pill transition-colors duration-200',
+                i() < t().seatsFilled ? PIP_HUES[i() % PIP_HUES.length] : 'bg-black/10',
               )}
             />
           )}
@@ -158,4 +161,3 @@ function TableCard(props: { table: TableSummary; joined: boolean; onJoin: () => 
     </article>
   )
 }
-

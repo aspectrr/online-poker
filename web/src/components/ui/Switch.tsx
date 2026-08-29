@@ -19,12 +19,12 @@ export function Switch(props: SwitchProps) {
       <SwitchPrimitive.Input class="sr-only" />
       <SwitchPrimitive.Control
         class={cn(
-          'relative inline-flex h-5 w-9 cursor-pointer items-center rounded-full border border-line transition-colors duration-200',
-          'data-[checked]:border-accent/60 data-[checked]:bg-accent/80 data-[unchecked]:bg-surface-raised',
+          'relative inline-flex h-5 w-9 cursor-pointer items-center rounded-pill border border-transparent transition-colors duration-200 ease-out',
+          'data-[checked]:border-accent data-[checked]:bg-accent data-[unchecked]:bg-black/15',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]',
         )}
       >
-        <SwitchPrimitive.Thumb class="pointer-events-none block size-3.5 translate-x-[3px] rounded-full bg-fg-muted shadow transition-transform duration-200 data-[checked]:translate-x-[19px] data-[checked]:bg-accent-fg" />
+        <SwitchPrimitive.Thumb class="pointer-events-none block size-3.5 translate-x-[3px] rounded-full bg-white shadow transition-transform duration-200 ease-out data-[checked]:translate-x-[19px]" />
       </SwitchPrimitive.Control>
     </SwitchPrimitive.Root>
   )

@@ -218,3 +218,36 @@ int64 cents everywhere. No floats, ever.
 ## Tests
 
 `go test ./...` in `server/`. Table-driven: min-raise legality, reopen rules, side pot construction, odd chip, RIT halves (+side pots), bomb pot flow, 7-2 (showdown/reveal/muck), trigger matching, evaluator categories/comparisons/PLO 2-from-hand, plus 300 random hands × 6 configs asserting chip conservation and termination.
+## ASPTR-196 — Notion warm-light retheme (web/)
+
+Design source of truth: `DESIGN.md` at repo root. Verified via headless Chrome computed-style probes (canvas #f6f5f4, Inter, card white/rgba(0,0,0,0.08)/12px, primary #0075de, ghost #e6f3fe/#0075de, nav shadow 0.016/0.03 layers, zero shadows on cards/dialog).
+
+### index.css
+
+- `:root` tokens swapped felt-dark → Notion warm-light: `--bg #f6f5f4`, `--surface #fff`, `--surface-raised #f1f0ef` (hover fill), `--border rgba(0,0,0,0.08)` hairline, ink alphas `--text 95% / --text-muted 60% / --text-faint 40%`, `--accent #0075de` (hover `#0a84ec`), `--accent-tint #e6f3fe`, accent cast `--marigold #ffb110 / --coral #f64932 / --sky-wash #62aef0 / --midnight #02093a`, `--danger #e32d14` (vermillion).
+- `--success #12805c`: only green in the system, added for form success state (magic-link "Check your inbox"); everything else palette-pure per DESIGN.md.
+- Semantic Tailwind color names unchanged (`bg`, `surface`, `line`, `fg`, `fg-muted`, `accent`, `danger`, `success`) + new utilities: `accent-tint`, `fg-faint`, `marigold`, `coral`, `sky-wash`, `midnight`.
+- `@theme` adds DESIGN.md type scale as `text-caption … text-display-lg` utilities (with baked line-height + negative letter-spacing at display sizes), radii `rounded-card 12px / rounded-btn 8px / rounded-small 4px / rounded-pill 9999px`.
+- `font-sans`/`font-display` both Inter (Sora dropped); Inter loaded via Google Fonts in `web/index.html` (400/500/600/700, display=swap); `font-feature-settings: 'lnum' 1` on body per DESIGN.md.
+- `.felt-bg` class deleted (flat canvas from `body` now); `::selection` blue tint; focus ring `#0075de66`.
+- `styles/animations.css` card/chip/win-pulse sections untouched (ASPTR-189's ticket); they recolor automatically via `--danger`.
+
+### ui/ kit (APIs unchanged — same props, same variants)
+
+- **Button**: `default` = filled #0075de/white; `ghost` = sky-tint bg + blue text (was transparent-muted; only call site is dialog Cancel — correct per DESIGN.md ghost CTA); **new `text` variant** = transparent/ink-95; `outline` = 1px ink border, 4px radius per DESIGN.md outlined-text spec; `danger` = vermillion. All 200ms ease, no shadows.
+- **Dialog**: overlay `bg-black/30`, backdrop-blur removed; content white, hairline, 12px, **no shadow** (elevation purely from overlay).
+- **Input/Select**: hairline borders, white bg, `placeholder ink-40%`, hover `border-black/20`, focus blue ring; select menu white/hairline (heavy shadow removed); Field hint text 40%.
+- **Slider**: track ink-tint, blue fill, white thumb + blue border.
+- **Switch**: unchecked `black/15`, checked solid blue, white thumb.
+
+### Pages
+
+- **Lobby**: canvas bg; sticky nav = white/90 blur + DESIGN.md nav elevation shadow (the one allowed shadow); table cards white/hairline/12px, hover = border darken only (no lift/shadow); gameType badge: PLO4 = marigold pill, NLHE = neutral; **seat pip bar rotates accent cast** (sky-wash → marigold → coral → blue → midnight, empty = black/10). Sign in = outline.
+- **Auth**: white hairline panel (no shadow), success icon on sky-tint/blue, code chips on surface-raised.
+- **Cards** (/cards, ASPTR-189 demo): chrome only — nav + canvas + section cards light; playground stage felt gradient → sky-tint panel (cards themselves untouched for the other ticket).
+- **Table page**: no `/table` route exists in this worktree's `App.tsx` — nothing to do, nothing errors.
+- Mock data flows, `CreateTableDialog` logic, all component props untouched.
+
+### Env note
+
+`web/node_modules` was absent in this worktree — `bun install --frozen-lockfile` restored; build (`tsc -b && vite build`) green after. Disk hit 100% mid-session and killed dev servers twice; keep an eye on it.
