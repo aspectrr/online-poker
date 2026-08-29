@@ -432,3 +432,77 @@ Also observed live: uncontested timeout-fold wins, post-hand rabbit prompt honor
 - Lobby `TableSummary` mapping from store rows is shallow (`seatsFilled` always 0 against the live API).
 - Inter-hand delay + 120s action clock make idle hands slow; dev table config is intentionally forgiving.
 - Straddle, multiway RIT, side-pot display: unchanged known gaps from earlier tickets.
+
+---
+
+# BUILD_NOTES — ASPTR-185/186/187: Bomb pots, 7-2 bounty, RIT + rabbit UI, deal animations
+
+All in `web/` + transport-layer `server/` (engine untouched except two additive helpers). New dep: none.
+
+## Deal animations (user-reported bugs)
+
+- **Board re-deal fixed.** Root cause: `TableCenter` looped a fixed 5-slot `Array.from({length:5})` through Solid `<For>` — undefined slots can't be keyed, so every street remounted all wrappers and `animate-deal` replayed. Rework: `<For each={cards}>` (keyed by card object identity; store appends, never rebuilds) + placeholder divs appended after, and outer board rows via `<Index>` (position-keyed) because `<For>` remounts rows on every new row-array identity. Proven in-browser: `data-probe` tags set on the 3 flop wrappers survive turn+river (3/3), only new cards mount.
+- **Opening deal sequence.** On `hand_started` the store choreographs client-side theater: one card per dealt-in seat, clockwise from left of the button (engine's deal order), `dealTotal` rounds (2 NLHE / 4 bomb pot), 170ms per card + 260ms per round gap ≈ 2.5s at 6-max. Cards fly from the felt-center deck via new `deal-seat` keyframe (`--deal-dx/--deal-dy` = seat offset from center, measured once in `Table.tsx`). Villains accumulate face-down `Card` backs; hero's real hole cards mount face-down and flip face-up as the following beat lands (final flip on a `dealDone` tick). Reconnect snapshots pre-fill `dealt` and set `dealDone` (no theater). Seat selection reads occupancy (occupied + stacked + not sitting out), not `inHand` flags — the seats frame trails the event batch.
+
+## Chip stacks
+
+- `ChipStack.tsx` — flat accent-hue chips (`#0075de`, marigold, coral, sky-wash, midnight — DESIGN.md accent cast), count = `1+floor(log2(stack/unit))` capped 8 (seats, 12 pot). Seats: tower left of the nameplate; pot pill: horizontal stack that grows as bets come in (was a static 3-chip image).
+
+## Bomb pot (ASPTR-185)
+
+- New event `bomb_pot_armed` (engine const added, emitted by the table layer): trigger match in `handEnded` (first matching dealt card rides in `cards`) or manual arm. Client stores `bombPotArmed: UICard | true | null` — persistent gold banner "NEXT HAND: DOUBLE BOARD PLO BOMB POT" with the trigger card rendered when trigger-driven; cleared on `hand_started`; red live banner "DOUBLE BOARD PLO BOMB POT" while the bomb-pot hand runs.
+- Manual arm: `ClientMsg{type:"bomb_pot"}` → `forceBombPot`, consumed by next `startHand`. Exposed as "Arm bomb pot next hand" in the settings drawer when `bomb_pot_mode=manual`.
+- Double-board UI: labels `board A/B` (bomb pot) vs `Run 1/Run 2` (RIT) — from `bombPot`, not board count; ½-pot indicator per row; per-board win ring (`boardWins` from `pot_awarded[].board_index` + `animate-board-win`).
+- Reconnect gap fixed: snapshot now carries `bomb_pot` (live) — `t.bombPot` tracked on the table; without it a mid-bomb-pot joiner mislabeled boards "Run 1/2" and lost the banner.
+- Server: `LoadedDeck(order)` + exported `StartHandWithDeck` (engine, additive; order served first, shuffled remainder) power dev-only forced deals.
+
+## 7-2 bounty (ASPTR-186)
+
+- `seven_deuce_bounty` → gold toast (marigold border/glow, `toast-gold` pop, 6s): "NAME wins $1.00 bounty w/ 7-2!". Stacks arrive via the existing seats frame. Showdown reveal unchanged (winner's 7-2 shows on all tabs). Observed live both ways: a natural bounty for bob and the forced-deal path for alice.
+
+## RIT + rabbit (ASPTR-187)
+
+- RIT: runout boards auto-label Run 1/Run 2 with ½-pot each; per-board win rings; per-board award messages ("bob wins $0.20 — flush run 2"). Staggered reveal falls out of per-board `street_dealt` ordering + card-identity animation.
+- Rabbit: `rabbit_hunt` cards appended flagged `rabbit:true`, rendered dimmed (opacity .55), tilted (-6deg), desaturated; mascot toast (RabbitMark) "Rabbit hunt: 10♦ 8♣ 9♦ 6♥ K♦".
+
+## Timeout default 15s
+
+- `store.TableConfig.ApplyDefaults`: 0 → 15 (validation still 5-300). `DEFAULT_TABLE_CONFIG.actionTimeoutSec` 30 → 15; dialog slider widened to 5-300 step 5; dialog copy "30s action clock" → "15s".
+
+## Settings drawer
+
+- `SettingsDrawer.tsx` — read-only slide-over from a header gear: game, blinds, action timeout, inter-hand delay, RIT, rabbit, 7-2 (+bounty), bomb-pot mode + trigger chips. `ConfigWire` extended (`rit`, `rabbit_hunt`, `seven_deuce`, `seven_deuce_bounty`, `bomb_pot_mode`, `bomb_pot_triggers`, `inter_hand_delay_s`).
+
+## Dev tooling (DEV_AUTH-gated)
+
+- `ClientMsg{type:"dev_deal", seat, cards}` → `t.devDeals` consumed next `startHand` via `loadedDeck` (round-major over seat-sorted players, random unused fill). Rejected on non-dev tables. URL hook: `?deal=7d2d` (parseDealParam) resends every hand start. Verified: seat shows 7♦2♦ every hand.
+- No-DB dev mode now supports the full create flow: `POST /api/tables` writes an in-memory registry (`dev-<hex>` ids), GET list/get/WS all serve it (shared `devRowByID`). CreateTableDialog → live server works end-to-end (its JSON body needed a mapper: UI camelCase → store snake_case, ranks 2-14; `bomb_pot_mode` every_hand → manual).
+
+## Other fixes found on the way
+
+- **ActionBar slider echo** (Kobalte): slider `onChange` re-emitted the current value on re-render, instantly reverting preset clicks to the old amount — every "All-in" preset silently degraded to min-raise. Guarded: ignore echoes equal to `raiseTo()`.
+- Lobby `joinTable` REST stub 404'd and blocked `navigate()` — removed; `?dev=` is now preserved into `/table/:id`.
+- `handEnded` leaves `streetBet` stale on the server seat view (showed a ghost $0.10 bet between hands) — cosmetic, noted, not fixed (seats frame overwrites on next hand start).
+- api.ts REST paths were missing the `/api` prefix (ws had it) — lobby list/create 404'd against the live server.
+
+## E2E (mandatory pass)
+
+`DEV_AUTH=1 go run ./cmd/server` + `VITE_API_URL=http://localhost:8080 bun run dev`. Two browser tabs (`?dev=alice@dev.local&deal=7d2d`, `?dev=bob@dev.local`), table created via the dialog path: NLHE 10/20, 100bb, RIT always, rabbit on, 7-2 $1, bomb pot manual, 15s default verified in the dialog. Second controlled table at 300s/60s for scripted play. Notes: mid-run the Orca embedded browser dropped (runtime stuck "starting") — finished in Chrome via chrome-devtools; same URLs/flows.
+
+- **Deal sequence:** on `hand_started`, backs fly center→seat one per beat (caught cards mid-flight at the deck origin in DOM probes), hero's pair lands face-down then flips; villain board accumulating correct.
+- **Board:** flop 3 animate, turn/river append — flop DOM nodes survive (identity check), no re-animation.
+- **Normal hand:** call/check/check/check/check → showdown; winner glow, pot chips fly.
+- **7-2:** alice (`?deal=7d2d`) wins uncontested (bob folds SB) → prompt "Show 7-2 (take bounty)" → gold marigold toast "…wins $1.00 bounty w/ 7-2!", stacks +$1.00; then rabbit prompt → board completes face-up dimmed/tilted + rabbit toast. A natural bob 7-2 bounty also observed.
+- **RIT:** alice jams (All-in preset → commit), bob calls → all-in runout on two boards labeled RUN 1 / RUN 2, ½ $20.00 each, both rings lit, split: "alice wins $1.90 — pair run 2" (server log: 4 pot_awarded = 2 pots × 2 boards, chips conserved).
+- **Bomb pot (manual arm):** drawer → "Arm bomb pot next hand" → persistent NEXT HAND banner on both tabs (trigger-card slot verified separately) → next hand: both ante (pot $0.40, "Ante" labels), 4 hole cards each dealt in 4 beats, flop immediately on BOARD A + BOARD B with ½ $0.20 labels, no preflop betting, check-check to showdown → both rows ring, "bob wins $0.20 — two_pair board B", live red banner during the hand.
+- **Settings drawer:** shows the exact live config (blinds, 120s/300s clocks, RIT always, rabbit on, 7-2 $1.00, bomb pot manual) + arm button in manual mode.
+- **Cards:** merged modern-minimal design (giant corner rank + center motif) renders on table seats, boards, and /cards demo — no page builds its own card SVGs.
+- Console: 0 errors on both tabs. `tsc -b && vite build` green (249kB js / 9kB css gz), `go test ./...` green (incl. new LoadedDeck/forced-deal/arm-broadcast/dev-gate tests), `betting.check.ts` green.
+
+## Known gaps (deliberate)
+
+- Deal sequence is client theater: a spectator joining between `hand_started` and their snapshot sees pre-filled backs (no animation) — correct, just not animated.
+- Chip tower scale is bb-relative log; absolute-blind changes between tables with tiny stacks can show equal towers (capped at 8).
+- Bomb-pot trigger banner needs a trigger match (server-side); manual arm covers deterministic demos. `bomb_pot_next` in a snapshot carries no card (banner without card) until the armed event arrives.
+- Trigger-mode live demo still not captured (dev-table queens are chance-based); manual path fully verified. Trigger wiring is unit-tested.
+- Post-hand prompt approximations from ASPTR-199 (winner-seat inference) unchanged.
