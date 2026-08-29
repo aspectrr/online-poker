@@ -227,8 +227,10 @@ func (r *HandRunner) LegalActionsFor() *LegalActions {
 
 // beginRunoutIfNeeded: when betting is over with >= 2 players contested,
 // announce the runout; if RIT, clone the board so both run independently.
+// Only when no further betting is possible (canActCount < 2) — otherwise
+// postflop action remains and boards must stay single.
 func (r *HandRunner) beginRunoutIfNeeded() Event {
-	if r.runoutAnnounced {
+	if r.runoutAnnounced || r.canActCount() >= 2 {
 		return Event{}
 	}
 	r.runoutAnnounced = true

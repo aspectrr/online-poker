@@ -358,3 +358,77 @@ Server `server/` + frontend `web/`. New dep: `github.com/coder/websocket` (Go). 
 - Reconnect mid-hand gets snapshot but not the hand's event history (board/pot only). Fine for v1.
 - Dead conn detection is write-failure based; no app-level ping. coder/websocket pings from client side suffice.
 
+
+---
+
+# BUILD_NOTES — ASPTR-199: Wire WS store into table UI (mock → live)
+
+Server `server/` + frontend `web/`. New dep: none. Goal met: a real hand played end-to-end in two Orca browser tabs (blinds → flop → showdown → pot awarded), recorded below.
+
+## Run it (no Supabase, no Postgres)
+
+```bash
+cd server && DEV_AUTH=1 go run ./cmd/server        # :8080, in-memory dev table
+cd web && VITE_API_URL=http://localhost:8080 bun run dev   # :5173
+# tab 1: http://localhost:5173/table/dev-table?dev=alice@dev.local
+# tab 2: http://localhost:5173/table/dev-table?dev=bob@dev.local
+```
+Both tabs auto-join the first open seat; hand starts 3s after 2 seated. Dev table: NLHE 10/20, 200bb, 120s action clock, RIT always, rabbit hunt on, 7-2 bounty $1, bomb-pot trigger = queens.
+
+## Server
+
+- **DEV_AUTH=1** (`auth/dev.go` + test): `?token=dev:<email>` bypasses JWT, mints deterministic uuid-shaped uid (sha256). Off by default (`EnableDevAuth` only when env set); non-`dev:` tokens unaffected.
+- **No-DB dev mode** (`cmd/server/main.go`): with DEV_AUTH=1 and no DATABASE_URL, one fixed in-memory table `dev-table` serves list/get/ws; POST /tables → 503. Permissive CORS for the vite dev origin (auth stays token-gated).
+- **`ws.Upgrade`**: allow `localhost:*`/`127.0.0.1:*` origins (vite dev is cross-origin; token still gates).
+- **Card wire format fix** (`engine/card.go`): `Card` had custom `MarshalJSON`/`UnmarshalJSON` added — `[]Card` was base64-encoding as `[]byte` (`"CSs="`), breaking every JS card renderer. Now plain numbers. Go-side tests unaffected.
+- **Engine bug — premature RIT clone** (`betting.go`): `beginRunoutIfNeeded` announced all-in runouts + cloned boards on every street close even when postflop betting was still possible → HU RIT tables played every hand on two boards. Now gated on `canActCount() < 2`. Regression test `TestRITNotClonedWhileBettingPossible`.
+- **Engine accessor** `PendingPostHand() (reveal, rabbit)` — `Done()` is true during the 7-2 reveal/rabbit pause, which made `postHandOffered` always bail (prompts never sent). Transport now keys prompts off this; prompt no longer guesses which decision is pending.
+- **Table actor**:
+  - `__attach` sends a snapshot immediately (spectators render; reconnect re-adopts seat without a join msg).
+  - Seat view derived from events in `publishEvents` (street bets from blinds/antes/call/raise-TO, folds, winner flags) + one `seats` frame per batch; `syncSeats` moved before broadcast so award stacks ship in the same frame (was clobbering `hand_ended` stacks client-side).
+  - `join` uses client-provided `name` (sanitized, ≤24 runes) instead of `player-<uid6>`.
+  - Deadline tracked when the timeout timer arms (`deadlineMs()` used to always return 0).
+  - `NewManager(*store.Store)` takes the concrete type — nil store no longer becomes a typed-nil `Persister` (panicked on first `InsertHand`).
+  - Removed double `afterAdvance` after reveal/muck/rabbit (double persist + double next-hand timer).
+- **Bomb-pot trigger fix**: `handEnded` nils the runner before `startHand` could match triggers against it → triggers could never fire. Now `lastDealt` snapshot kept on the table, consumed by the next startHand only.
+- `engineConfig` now wires `SevenDeuce{Enabled,Amount}` (NLHE tables only) and `BombPotTriggers` → `engine.CardTrigger` (store ranks 2-14 → engine 0-12).
+- Ops logs: `pot_awarded`/`hand_ended` (stacks + conservation sum) per hand.
+
+## Frontend
+
+- **Types unified** (`lib/protocol.ts` = single source): wire types (`TableSnapshot`, `LegalActionsWire` renamed to free the UI names) + UI facade types (`TableState`, `SeatState`, `LegalActions`, `PlayerAction`, `TableStore`, `toUICard`/`uiSeat`/`uiLegal`/`cardText`). `lib/tableTypes.ts` = one-line re-export so component imports stay put.
+- **`stores/table.ts` rewritten** as the TableStore facade over ws: snapshot/seats frames rebuild state; events fold into seats/board/pot/turn (street text, last-action labels, showdown reveals, winner flags, bomb-pot flag, post-hand prompt). Server `seats` frames are authoritative for stacks/bets/folds — no client-side chip arithmetic (that raced and desynced).
+- Identity (`lib/identity.ts`): supabase session first, else per-tab `?dev=<email>` → `dev:` token (server DEV_AUTH gates). api.ts attaches the token to REST too (lobby works against the live server).
+- Join-on-mount with identity; spectator (`heroSeat -1`) otherwise; empty seats render clickable "sit here". `seat taken` error resets the join latch → next open seat retried.
+- `send`: raise→`{kind:'bet',amount}` (raise-TO), reveal/muck/rabbit→`{type:'rabbit',reveal?}`.
+- Turn clock: `turnTimeoutMs` from snapshot config (arc math no longer hardcodes 20s); deadline from `turn_changed`.
+- Toasts (7-2 bounty, etc.) surfaced via `store.toasts`, rendered top-center on the table page.
+- Post-hand prompt bar in ActionBar idle state: Show 7-2 / Muck / Rabbit hunt / Skip (verified live — rabbit hunt clicked, engine advanced).
+- Seat.tsx: villains' showdown reveals render face-up (`SeatState.revealedCards`); empty-seat join button.
+- ActionBar: `potTotal` = `potCents` (facade contract: pot includes street bets — server pot already does).
+- ws.ts: malformed/handler-throwing frames now `console.error` (was silent — hid the base64 bug).
+- Mock mode: `mockTable.ts` → `demoTable.ts`, `createMockTable` → `createDemoTable`; chosen in Table.tsx by `VITE_API_URL` unset.
+
+## The recorded hand (two Orca tabs, dev table)
+
+alice (seat 0) vs bob (seat 1), blinds 0.10/0.20, stacks 40.00 each:
+
+- Preflop: alice (SB/button) calls $0.10; bob (BB) checks.
+- Flop 10♥ 10♠ 3♦: check, check. Turn A♥: check, check. River 2♠: check, check.
+- Showdown: alice 2♣8♣ (tens and twos) beats bob Q♥9♥ (pair of tens); villain cards revealed face-up on both tabs.
+- Pot $0.40 awarded to alice; stacks 40.20/39.80 in both tabs; chip conservation asserted server-side (`hand_ended sum=8000`).
+
+Also observed live: uncontested timeout-fold wins, post-hand rabbit prompt honored, turn-clock arcs + timeout auto-actions, per-street status lines.
+
+## Verification
+
+`go test ./...` 105 passed (incl. new: dev-token bypass ×2, trigger wiring, RIT no-clone regression). `tsc -b && vite build` green (247.8kB js / 8.5kB css gz). `bun src/lib/betting.check.ts` green. Live two-tab hand as above; award/hand_ended logs reconcile to the cent.
+
+## Known gaps / TODO (deliberate, not regressions)
+
+- **TODO: bomb-pot trigger live demo.** Trigger path fixed (lastDealt) + unit-tested, but a live bomb-pot hand (banner + double board + antes) wasn't captured before landing — earlier double-board observation predates the fix. Verify on next session: queens appear in ~most hands, so a bomb pot should fire within a few deals.
+- **TODO: 7-2 bounty toast not yet observed live** (needs a winner holding exact 7+2). Store wiring + engine emission are covered by engine tests; watch for the toast on a lucky hand.
+- Reconnect mid-hand: snapshot lacks current street bets (wire carries them but server can't know pre-join); stacks/pot/board correct.
+- Lobby `TableSummary` mapping from store rows is shallow (`seatsFilled` always 0 against the live API).
+- Inter-hand delay + 120s action clock make idle hands slow; dev table config is intentionally forgiving.
+- Straddle, multiway RIT, side-pot display: unchanged known gaps from earlier tickets.

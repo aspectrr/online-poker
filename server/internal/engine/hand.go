@@ -302,7 +302,16 @@ func (r *HandRunner) deadline() int64 {
 }
 
 // Done reports hand completion (rabbit hunt may still be offered).
+// Note: done=true also while a post-hand decision is pending — check
+// PendingPostHand before treating the hand as fully terminal.
 func (r *HandRunner) Done() bool { return r.done }
+
+// PendingPostHand: hand finished but a transport-mediated winner decision
+// is open — reveal/muck (7-2 bounty) and/or rabbit hunt. Transport relays
+// the choice via Advance(Reveal/Muck/RabbitHunt).
+func (r *HandRunner) PendingPostHand() (reveal bool, rabbit bool) {
+	return r.pendingRevealIdx >= 0, r.rabbitAvailable
+}
 
 // Stacks: end-of-hand stacks (valid once Done).
 func (r *HandRunner) Stacks() []FinalStack {

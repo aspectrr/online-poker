@@ -26,7 +26,7 @@ export function ActionBar(props: {
   const [typing, setTyping] = createSignal(false)
   const [inputEl, setInputEl] = createSignal<HTMLInputElement | null>(null)
 
-  const potTotal = () => t().potCents + t().seats.reduce((a, s) => a + s.betCents, 0)
+  const potTotal = () => t().potCents // contract: pot includes current street bets
   const streetBet = () => Math.max(0, ...t().seats.map((s) => s.betCents))
   const heroBet = () => t().seats[t().heroSeat]?.betCents ?? 0
 
@@ -127,7 +127,7 @@ export function ActionBar(props: {
   onCleanup(() => window.removeEventListener('keydown', onKey))
 
   return (
-    <Show when={active()} fallback={<IdleBar table={t()} error={props.error} />}>
+    <Show when={active()} fallback={<IdleBar table={t()} send={props.send} error={props.error} />}>
       <div class="mx-auto w-full max-w-3xl rounded-2xl border border-line bg-surface/95 p-3 shadow-2xl shadow-black/50 backdrop-blur">
         <Show when={props.error}>
           <div class="mb-2 rounded-lg bg-danger/15 px-3 py-1.5 text-xs font-medium text-danger">{props.error}</div>
@@ -222,17 +222,34 @@ export function ActionBar(props: {
   )
 }
 
-function IdleBar(props: { table: TableState; error: string | null }) {
+function IdleBar(props: { table: TableState; send: (a: PlayerAction) => void; error: string | null }) {
+  const t = () => props.table
   return (
     <div class="mx-auto w-full max-w-3xl">
       <Show when={props.error} fallback={
-        <div class="rounded-2xl border border-line/60 bg-surface/50 px-4 py-2.5 text-center text-sm text-fg-muted backdrop-blur">
-          {props.table.handNo > 0
-            ? props.table.street === 'showdown' || props.table.street === 'complete'
-              ? props.table.message
-              : 'Waiting for opponents…'
-            : 'Connecting…'}
-        </div>
+        <Show when={t().postHand} fallback={
+          <div class="rounded-2xl border border-line/60 bg-surface/50 px-4 py-2.5 text-center text-sm text-fg-muted backdrop-blur">
+            {t().handNo > 0
+              ? t().street === 'showdown' || t().street === 'complete'
+                ? t().message
+                : 'Waiting for opponents…'
+              : 'Connecting…'}
+          </div>
+        }>
+          {(ph) => (
+            <div class="flex items-center justify-center gap-2 rounded-2xl border border-accent/40 bg-accent-tint/60 px-4 py-2.5 backdrop-blur">
+              <span class="text-sm font-medium text-fg">Your decision:</span>
+              <Show when={ph().bounty}>
+                <Button size="sm" onClick={() => props.send({ kind: 'reveal' })}>Show 7-2 (take bounty)</Button>
+                <Button variant="outline" size="sm" onClick={() => props.send({ kind: 'muck' })}>Muck</Button>
+              </Show>
+              <Show when={ph().rabbit}>
+                <Button size="sm" onClick={() => props.send({ kind: 'rabbit' })}>Rabbit hunt</Button>
+                <Button variant="outline" size="sm" onClick={() => props.send({ kind: 'muck' })}>Skip</Button>
+              </Show>
+            </div>
+          )}
+        </Show>
       }>
         <div class="rounded-2xl border border-danger/40 bg-danger/10 px-4 py-2.5 text-center text-sm font-medium text-danger">
           {props.error}

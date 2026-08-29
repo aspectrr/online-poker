@@ -38,8 +38,9 @@ func (c *Client) UserID() string { return c.userID }
 
 func Upgrade(w http.ResponseWriter, r *http.Request, userID string, onMsg func(*Client, protocol.ClientMsg), onClose func(*Client)) *Client {
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		// Browsers send no Origin on same-origin WS; Vite dev proxies.
-		InsecureSkipVerify: false,
+		// Vite dev server (localhost:5173) is a different origin; auth is
+		// token-gated, so localhost patterns are safe to allow.
+		OriginPatterns: []string{"localhost:*", "127.0.0.1:*"},
 	})
 	if err != nil {
 		log.Printf("ws: upgrade: %v", err)

@@ -53,10 +53,12 @@ func (t *Table) startHand() {
 	if t.seatedCount() < 2 {
 		return
 	}
-	// Bomb pot trigger match from previous hand's dealt cards.
+	// Bomb pot trigger match from previous hand's dealt cards. (The previous
+	// runner is nil'd in handEnded, so keep its dealt cards on the table.)
 	bombPot := false
-	if t.runner != nil && len(t.cfg.BombPotCardTriggers) > 0 {
-		bombPot = engine.AnyTriggerMatch(t.cfg.BombPotCardTriggers, t.runner.DealtCards())
+	if len(t.lastDealt) > 0 && len(t.cfg.BombPotCardTriggers) > 0 {
+		bombPot = engine.AnyTriggerMatch(t.cfg.BombPotCardTriggers, t.lastDealt)
+		t.lastDealt = nil // trigger consumed: applies to the next hand only
 	}
 	cfg := t.cfg
 	cfg.BombPot = bombPot
@@ -80,6 +82,9 @@ func (t *Table) startHand() {
 		log.Printf("table %s: start hand: %v", t.row.ID, err)
 		return
 	}
+	if bombPot {
+		log.Printf("table %s hand %d: BOMB POT (trigger matched)", t.row.ID, cfg.HandID)
+	}
 	t.runner = r
 	t.handNo = cfg.HandID
 	t.pending = nil
@@ -89,6 +94,7 @@ func (t *Table) startHand() {
 		s.allIn = false
 		s.lastAction = ""
 		s.streetBet = 0
+		s.isWinner = false
 		s.lastHoles = r.HolesFor(s.seat)
 	}
 	evs, err := r.Advance(nil) // drain setup: hand_started, blinds
@@ -122,16 +128,11 @@ func (t *Table) afterAdvance() {
 	}
 	r := t.runner
 
-	// Sync stacks + street bets from engine after every advance.
-	t.syncSeats()
+	// (stacks are synced in publishEvents, before the batch's seats frame)
 
 	if r.Done() {
 		t.persistHand()
 		t.timerStop()
-		// post-hand prompt (reveal/muck for 7-2, then rabbit) if offered
-		if la := r.LegalActionsFor(); la == nil && !r.Done() {
-			// unreachable; Done checked above
-		}
 		if t.postHandOffered() {
 			return // waiting on winner's decision; hand_end fires after
 		}
@@ -152,7 +153,8 @@ func (t *Table) afterAdvance() {
 // reveal/muck or rabbit. Sends prompt; returns true when waiting.
 func (t *Table) postHandOffered() bool {
 	r := t.runner
-	if r.LegalActionsFor() != nil || r.Done() {
+	reveal, rabbit := r.PendingPostHand()
+	if !reveal && !rabbit {
 		return false
 	}
 	// Who is it waiting on? The last pot winner still seated.
@@ -162,14 +164,8 @@ func (t *Table) postHandOffered() bool {
 		return false
 	}
 	prompt := &protocol.PostHandPrompt{Seat: seatNo}
-	// ponytail: distinguishing bounty-vs-rabbit from outside the engine is
-	// approximated: bounty offered when 7-2 enabled, rabbit when cfg allows.
-	if t.cfg.SevenDeuce.Enabled {
-		prompt.Bounty = true
-	}
-	if t.cfg.RabbitHunt {
-		prompt.Rabbit = true
-	}
+	prompt.Bounty = reveal
+	prompt.Rabbit = rabbit
 	t.pending = prompt
 	if s.conn != nil {
 		s.conn.TrySend(protocol.ServerMsg{Type: "post_hand", Post: prompt})
@@ -187,6 +183,9 @@ func (t *Table) lastWinnerSeat() int {
 func (t *Table) handEnded() {
 	// advance button to next occupied seat
 	t.button = t.nextButton()
+	if t.runner != nil {
+		t.lastDealt = t.runner.DealtCards() // for the next hand's bomb-pot triggers
+	}
 	t.runner = nil
 	t.pending = nil
 	delay := time.Duration(t.cfg.InterHandDelaySecs) * time.Second
@@ -208,15 +207,15 @@ func (t *Table) nextButton() int {
 	return t.button
 }
 
-// syncSeats: pull stacks/streetBets/allIn from engine into seat view.
+// syncSeats: pull stacks/allIn from engine into seat view.
 func (t *Table) syncSeats() {
 	for _, fs := range t.runner.Stacks() {
 		if s := t.seatByNo(fs.Seat); s != nil {
 			s.stack = fs.Stack
+			// engine doesn't export an all-in flag; zero stack mid-hand is it
+			s.allIn = s.inHand && !s.folded && fs.Stack == 0
 		}
 	}
-	// streetBet: engine doesn't export per-street bets; derive from
-	// last ActionAccepted events in publishEvents instead.
 }
 
 // persistHand: write hand history jsonb.
@@ -240,10 +239,15 @@ func (t *Table) persistHand() {
 // ---- events / redaction ----
 
 // publishEvents: broadcast each event; private hole deliveries per seat.
+// Also folds public event fields into the seat view (street bets, folds,
+// winner flags) so snapshots + seats broadcasts carry them, then sends one
+// seats frame per batch.
 func (t *Table) publishEvents(evs []protocol.Event) {
+	t.syncSeats() // stacks/allIn current before any seats frame goes out
 	t.handEvents = append(t.handEvents, evs...)
 	for i := range evs {
 		ev := evs[i]
+		t.applyEventToSeats(&ev)
 		if ev.Type == protocol.EvPotAwarded && len(ev.Winners) > 0 {
 			t.lastWinner = ev.Winners[0].Seat
 		}
@@ -271,6 +275,63 @@ func (t *Table) publishEvents(evs []protocol.Event) {
 			c.TrySend(protocol.ServerMsg{Type: "event", Event: &out})
 		}
 	}
+	t.broadcastSeats()
+}
+
+// applyEventToSeats: mirror event facts into the per-seat view so clients
+// see street bets / folds / winners without re-deriving from events.
+func (t *Table) applyEventToSeats(ev *protocol.Event) {
+	if ev.Type == protocol.EvPotAwarded {
+		log.Printf("table %s hand %d: pot_awarded seat=%d amount=%d",
+			t.row.ID, t.handNo, ev.Winners[0].Seat, ev.Winners[0].Amount)
+	}
+	if ev.Type == protocol.EvHandEnded {
+		var sum int64
+		for _, fs := range ev.Stacks {
+			sum += fs.Stack
+		}
+		log.Printf("table %s hand %d: hand_ended stacks=%v sum=%d", t.row.ID, t.handNo, ev.Stacks, sum)
+	}
+	seatBy := func(n int) *seat {
+		if s := t.seatByNo(n); s != nil {
+			return s
+		}
+		return &seat{} // no-op sink
+	}
+	switch ev.Type {
+	case protocol.EvBlindsPosted:
+		s := seatBy(ev.Seat)
+		s.streetBet += ev.Amount
+		s.lastAction = "sb"
+		if ev.Amount != t.cfg.SmallBlind {
+			s.lastAction = "bb"
+		}
+	case protocol.EvAntesPosted:
+		s := seatBy(ev.Seat)
+		s.streetBet += ev.Amount
+		s.lastAction = "ante"
+	case protocol.EvActionAccepted:
+		s := seatBy(ev.Seat)
+		if ev.Action != nil {
+			s.lastAction = ev.Action.Kind.String()
+			if ev.Action.Kind == engine.Fold {
+				s.folded = true
+			}
+		}
+		if ev.To > 0 {
+			s.streetBet = ev.To // raise-TO total
+		} else if ev.Amount > 0 {
+			s.streetBet += ev.Amount // call pay
+		}
+	case protocol.EvStreetDealt:
+		for _, s := range t.seats {
+			s.streetBet = 0
+		}
+	case protocol.EvPotAwarded:
+		for _, w := range ev.Winners {
+			seatBy(w.Seat).isWinner = true
+		}
+	}
 }
 
 // ---- timeouts ----
@@ -280,6 +341,7 @@ func (t *Table) armTimeout(la *engine.LegalActions) {
 	if t.cfg.ActionTimeoutSecs <= 0 {
 		return
 	}
+	t.deadline = time.Now().Add(time.Duration(t.cfg.ActionTimeoutSecs) * time.Second).UnixMilli()
 	seatNo := la.Seat
 	t.timer = time.AfterFunc(time.Duration(t.cfg.ActionTimeoutSecs)*time.Second, func() {
 		t.Send(nil, protocol.ClientMsg{Type: "__timeout", Seat: seatNo})
@@ -323,6 +385,7 @@ func (t *Table) timerStop() {
 		t.timer.Stop()
 		t.timer = nil
 	}
+	t.deadline = 0
 }
 
 // ---- chat ----
@@ -359,9 +422,6 @@ func rabbitReveal(t *Table, in inbox) {
 	} else {
 		t.advance(&engine.Action{Seat: s.seat, Kind: engine.RabbitHunt}, s)
 	}
-	if t.runner != nil && t.runner.Done() {
-		t.afterAdvance()
-	}
 }
 
 // onPostTimeout: winner didn't decide in time — muck (no bounty), skip rabbit.
@@ -371,7 +431,4 @@ func (t *Table) onPostTimeout() {
 		return
 	}
 	t.advance(&engine.Action{Seat: t.pending.Seat, Kind: engine.Muck}, nil)
-	if t.runner != nil && t.runner.Done() {
-		t.afterAdvance()
-	}
 }
