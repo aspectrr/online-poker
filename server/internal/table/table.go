@@ -7,7 +7,6 @@ package table
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sync"
 	"time"
 
@@ -39,6 +38,7 @@ type seat struct {
 	sittingOut bool
 	lastAction string
 	streetBet  int64
+	isWinner   bool
 	conn       *ws.Client // current connection, nil between reconnects
 	// lastHoles: private cards for reconnect snapshot while hand running
 	lastHoles []engine.Card
@@ -62,8 +62,11 @@ type Table struct {
 	handNo   int64
 	runner   *engine.HandRunner
 	timer    *time.Timer // action timeout
+	deadline int64       // unix ms of the armed timeout, 0 = none
 	nextHand *time.Timer // inter-hand delay
 	pending  *protocol.PostHandPrompt
+	// lastDealt: previous hand's cards, for the next hand's bomb-pot triggers
+	lastDealt []engine.Card
 	// handEvents: current hand's public events for persistence + late snapshot
 	handEvents  []protocol.Event
 	lastWinner  int
@@ -92,11 +95,48 @@ func engineConfig(row store.GameTable) engine.TableConfig {
 		RunItTwice:         row.Config.RIT,
 		RabbitHunt:         row.Config.RabbitHunt,
 		BombPotEveryNHands: 0,
+		BombPotCardTriggers: triggersToEngine(row.Config.BombPotTriggers),
+	}
+	// 7-2 is NLHE-only in the engine; don't arm it on PLO4 tables.
+	if row.GameType == "NLHE" {
+		cfg.SevenDeuce = engine.SevenDeuceConfig{Enabled: row.Config.SevenDeuce, Amount: row.Config.SevenDeuceBounty}
 	}
 	if row.GameType == "PLO4" {
 		cfg.Game = engine.PLO4
 	}
 	return cfg
+}
+
+// triggersToEngine converts store jsonb triggers (rank 2-14) to engine
+// CardTriggers (rank 0-12); nil for "any" fields.
+func triggersToEngine(in []store.BombPotTrigger) []engine.CardTrigger {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]engine.CardTrigger, 0, len(in))
+	for _, t := range in {
+		if t.Rank == nil {
+			continue
+		}
+		rank := *t.Rank - 2
+		switch {
+		case t.Suit != nil:
+			c := engine.NewCard(rank, *t.Suit)
+			out = append(out, engine.CardTrigger{ExactCard: &c})
+		case t.Color != nil && (*t.Color == "red" || *t.Color == "black"):
+			color := 0
+			if *t.Color == "red" {
+				color = 1
+			}
+			out = append(out, engine.CardTrigger{RankColor: &struct {
+				Rank  int
+				Color int // 0 black, 1 red
+			}{rank, color}})
+		default:
+			out = append(out, engine.CardTrigger{RankOnly: &rank})
+		}
+	}
+	return out
 }
 
 // New builds a Table from a store row and starts its goroutine.
@@ -191,6 +231,18 @@ func (t *Table) handle(in inbox) {
 	switch in.msg.Type {
 	case "__attach":
 		t.clients[in.client] = struct{}{}
+		// Snapshot immediately: spectators render the table; a reconnecting
+		// player re-adopts their seat without waiting for a join message.
+		viewer := -1
+		uid := in.client.UserID()
+		for _, s := range t.seats {
+			if s.userID != "" && s.userID == uid {
+				s.conn = in.client
+				viewer = s.seat
+				break
+			}
+		}
+		in.client.TrySend(protocol.ServerMsg{Type: "state", State: t.snapshotFor(viewer)})
 		return
 	case "__detach":
 		delete(t.clients, in.client)
@@ -248,7 +300,7 @@ func (t *Table) join(c *ws.Client, m protocol.ClientMsg) {
 	}
 	s.userID = uid
 	s.conn = c
-	s.name = fmt.Sprintf("player-%s", uid[:min(6, len(uid))])
+	s.name = sanitizeName(m.Name, uid)
 	s.stack = t.cfg.StartingStackBB * t.cfg.BigBlind
 	s.sittingOut = false
 	s.lastAction = ""

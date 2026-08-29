@@ -1,14 +1,14 @@
 /**
- * Mock table store — standalone UI driver while ASPTR-181 (ws-backed
- * stores/table.ts) lands. Same TableStore interface. A hand is an explicit
- * timeline of steps; a cursor walks it with per-step delays. 'hero' steps
- * park the cursor until send() (or timeout auto-check). ponytail: scripted
- * theater, not an engine — the real store replaces this wholesale.
+ * Demo table store — scripted hand for backendless UI work (VITE_API_URL
+ * unset). Same TableStore facade as the live store in stores/table.ts.
+ * A hand is an explicit timeline of steps; a cursor walks it with per-step
+ * delays. 'hero' steps park the cursor until send() (or timeout auto-check).
+ * ponytail: scripted theater, not an engine.
  */
 import { createStore } from 'solid-js/store'
 import type {
   LegalActions, PlayerAction, SeatState, Street, TableState, TableStore, UICard,
-} from '../lib/tableTypes'
+} from '../lib/protocol'
 
 const SB = 10, BB = 20, HERO = 2, MAX = 6, START_STACK = 5000
 const NAMES = ['mika', 'tomas', 'you', 'priya', 'leo', 'anna']
@@ -71,7 +71,7 @@ function freshSeats(): SeatState[] {
 
 const fmt = (c: number) => `$${(c / 100).toFixed(2)}`
 
-export function createMockTable(tableId: string): TableStore {
+export function createDemoTable(tableId: string): TableStore {
   let timers: ReturnType<typeof setTimeout>[] = []
   const later = (fn: () => void, ms: number) => timers.push(setTimeout(fn, ms))
   const clearAll = () => { timers.forEach(clearTimeout); timers = [] }
@@ -91,7 +91,7 @@ export function createMockTable(tableId: string): TableStore {
     holeCards: [],
     toAct: -1, deadlineUnixMs: null, legal: null,
     handNo: 0, message: 'Taking your seat…',
-    bombPot: false, isDoubleBoard: false,
+    bombPot: false, isDoubleBoard: false, postHand: null, turnTimeoutMs: 20000,
   })
   const [err, setErr] = createStore({ lastError: null as string | null })
 
@@ -259,7 +259,10 @@ export function createMockTable(tableId: string): TableStore {
   return {
     get state() { return state },
     get lastError() { return err.lastError },
+    get status() { return 'open' as const },
+    get toasts() { return [] as { id: number; text: string }[] },
     send,
+    joinSeat: () => {}, // demo seats everyone up front
     dispose: clearAll,
   }
 }

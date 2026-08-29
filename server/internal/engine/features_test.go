@@ -326,3 +326,39 @@ func TestSevenDeuceUncontestedMuck(t *testing.T) {
 		t.Fatalf("seat0 stack %d, want 10100", s0)
 	}
 }
+
+// RIT regression: with postflop betting still possible (no all-in), the
+// board stays single and no all_in_runout is announced, even though street
+// transitions pass through the same code path.
+func TestRITNotClonedWhileBettingPossible(t *testing.T) {
+	cfg := baseCfg()
+	cfg.RunItTwice = RITAlways
+	r, err := startHand(cfg, seats2(), mustDeck(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	evs := tick(t, r)
+	evs = append(evs, act(t, r, Action{Seat: 0, Kind: Call})...) // SB completes
+	evs = append(evs, act(t, r, Action{Seat: 1, Kind: Check})...) // BB checks -> flop
+	// postflop betting must still be possible: two boards would be wrong
+	if len(r.Board()) != 1 {
+		t.Fatalf("board cloned while betting possible: %d boards", len(r.Board()))
+	}
+	for _, e := range evs {
+		if e.Type == EvAllInRunout {
+			t.Fatal("all_in_runout announced while betting still possible")
+		}
+	}
+	if la := r.LegalActionsFor(); la == nil {
+		t.Fatal("postflop action expected")
+	}
+	// check it down: BB (seat 1) acts first postflop, every street
+	for street := 0; street < 3; street++ {
+		evs = append(evs, act(t, r, Action{Seat: 1, Kind: Check})...)
+		evs = append(evs, act(t, r, Action{Seat: 0, Kind: Check})...)
+	}
+	evs = append(evs, runTo(t, r)...)
+	if n := len(r.Board()); n != 1 {
+		t.Fatalf("final board count = %d, want 1", n)
+	}
+}

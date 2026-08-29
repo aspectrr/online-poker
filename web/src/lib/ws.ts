@@ -39,8 +39,9 @@ export class TableSocket {
     ws.onmessage = (e) => {
       try {
         this.onMsg(JSON.parse(e.data) as ServerMsg)
-      } catch {
-        // malformed frame: server never sends these; drop
+      } catch (err) {
+        // malformed frame: server never sends these; log and drop
+        console.error('ws frame error', err, e.data)
       }
     }
     ws.onclose = () => {

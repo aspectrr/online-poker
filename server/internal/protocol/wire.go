@@ -63,6 +63,7 @@ type SeatWire struct {
 	AllIn      bool   `json:"all_in,omitempty"`
 	SittingOut bool   `json:"sitting_out,omitempty"`
 	IsButton   bool   `json:"is_button,omitempty"`
+	IsWinner   bool   `json:"is_winner,omitempty"`
 	LastAction string `json:"last_action,omitempty"`
 	StreetBet  int64  `json:"street_bet,omitempty"`
 }

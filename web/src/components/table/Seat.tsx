@@ -18,6 +18,8 @@ export function Seat(props: {
   /** fraction of timeout remaining 0..1 */
   frac: number
   isHero: boolean
+  /** present when a spectator may take this empty seat */
+  onJoin?: () => void
   class?: string
   style?: string
 }) {
@@ -28,6 +30,11 @@ export function Seat(props: {
     props.isHero && props.table.holeCards[0]
       ? props.table.holeCards[0].map((c) => ({ ...c }))
       : null
+  // showdown reveal: villains' cards go face-up
+  const revealed = () => {
+    const cards = s().revealedCards
+    return !props.isHero && cards?.length ? cards.map((c) => ({ ...c })) : null
+  }
 
   return (
     <div class={cn('absolute flex w-36 flex-col items-center gap-1.5 -translate-x-1/2 -translate-y-1/2', props.class)} style={props.style}>
@@ -35,14 +42,18 @@ export function Seat(props: {
       <Show when={!empty()}>
         <div class="flex -space-x-4">
           <Show when={holeCards()} fallback={
-            <Show when={s().hasCards}>
-              <CardRow
-                cards={[{ rank: 'A', suit: 's' }, { rank: 'A', suit: 's' }]}
-                faceDownCount={2}
-                size="sm"
-                revealed={false}
-                class="pointer-events-none opacity-95"
-              />
+            <Show when={revealed()} fallback={
+              <Show when={s().hasCards}>
+                <CardRow
+                  cards={[{ rank: 'A', suit: 's' }, { rank: 'A', suit: 's' }]}
+                  faceDownCount={2}
+                  size="sm"
+                  revealed={false}
+                  class="pointer-events-none opacity-95"
+                />
+              </Show>
+            }>
+              <CardRow cards={revealed()!} size="sm" revealed />
             </Show>
           }>
             <CardRow cards={holeCards()!} size="sm" revealed />
@@ -103,9 +114,19 @@ export function Seat(props: {
       </Show>
 
       <Show when={empty()}>
-        <div class="w-full rounded-xl border border-dashed border-line/70 bg-black/20 px-2.5 py-2.5 text-center text-[11px] text-fg-muted">
-          empty seat
-        </div>
+        <Show when={props.onJoin} fallback={
+          <div class="w-full rounded-xl border border-dashed border-line/70 bg-black/20 px-2.5 py-2.5 text-center text-[11px] text-fg-muted">
+            empty seat
+          </div>
+        }>
+          <button
+            type="button"
+            class="w-full rounded-xl border border-dashed border-accent/50 bg-black/20 px-2.5 py-2.5 text-center text-[11px] font-semibold text-accent transition-colors hover:bg-accent/10"
+            onClick={() => props.onJoin?.()}
+          >
+            sit here
+          </button>
+        </Show>
       </Show>
     </div>
   )

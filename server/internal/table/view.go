@@ -63,10 +63,6 @@ func (t *Table) action(c *ws.Client, m protocol.ClientMsg) {
 		s.conn.TrySend(protocol.ServerMsg{Type: "error", Error: "unknown action kind"})
 		return
 	}
-	s.lastAction = strings.ToLower(m.Kind)
-	if kind == engine.Raise {
-		s.lastAction = "raise"
-	}
 	t.advance(&engine.Action{Seat: s.seat, Kind: kind, Amount: m.Amount}, s)
 }
 
@@ -102,6 +98,7 @@ func (t *Table) seatsWire() []protocol.SeatWire {
 			AllIn:      s.allIn,
 			SittingOut: s.sittingOut,
 			IsButton:   s.seat == t.button,
+			IsWinner:   s.isWinner,
 			LastAction: s.lastAction,
 			StreetBet:  s.streetBet,
 		}
@@ -163,12 +160,25 @@ func (t *Table) runnerStreet() string {
 	return "preflop"
 }
 
-// deadlineMs: when the current actor must act (approx from timer arm time).
+// deadlineMs: when the current actor must act (armed when the timeout timer
+// starts; 0 mid-street or when no timeout is configured).
 func (t *Table) deadlineMs() int64 {
-	if t.timer == nil || t.cfg.ActionTimeoutSecs <= 0 {
-		return 0
+	return t.deadline
+}
+
+// sanitizeName: client-provided display name, or a uid-derived fallback.
+func sanitizeName(name, uid string) string {
+	name = strings.Map(func(r rune) rune {
+		if r >= 32 && r != 127 {
+			return r
+		}
+		return -1
+	}, strings.TrimSpace(name))
+	if name == "" {
+		return "player-" + uid[:min(6, len(uid))]
 	}
-	// ponytail: timer doesn't expose its deadline; approximate via cfg now.
-	// Turn_changed events carry the authoritative deadline_unix_ms.
-	return 0
+	if len([]rune(name)) > 24 {
+		name = string([]rune(name)[:24])
+	}
+	return name
 }

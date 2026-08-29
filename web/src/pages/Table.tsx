@@ -1,11 +1,14 @@
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js'
 import { useParams, A } from '@solidjs/router'
-import { createMockTable } from '../stores/mockTable'
-import type { TableStore } from '../lib/tableTypes'
+import { provideTable } from '../stores/table'
+import { createDemoTable } from '../stores/demoTable'
+import type { TableStore } from '../lib/protocol'
 import { Seat } from '../components/table/Seat'
 import { TableCenter } from '../components/table/TableCenter'
 import { ActionBar } from '../components/table/ActionBar'
 import { blinds } from '../lib/money'
+
+const API_URL = import.meta.env.VITE_API_URL as string | undefined
 
 /** Ellipse seat positions (fractions of the felt box) for up to 9 seats. */
 const SEAT_POS: Record<number, [number, number][]> = {
@@ -30,8 +33,10 @@ function useClock() {
 
 export function TablePage() {
   const params = useParams()
-  // ASPTR-181: swap createMockTable for the ws-backed store — same interface.
-  const store: TableStore = createMockTable(params.id ?? 'demo')
+  // ASPTR-199: VITE_API_URL set -> live ws store; unset -> scripted demo hand.
+  const store: TableStore = API_URL
+    ? provideTable(params.id ?? 'dev-table')
+    : createDemoTable(params.id ?? 'demo')
   onCleanup(() => store.dispose())
   const now = useClock()
 
@@ -42,9 +47,8 @@ export function TablePage() {
   const fracFor = (seat: number) => {
     const dl = deadline()
     if (dl == null || t().toAct !== seat) return 1
-    // assume 20s clock — mock deadline encodes think+6s for villains; hero uses 20s
     const ms = Math.max(0, dl - now())
-    return Math.min(1, ms / 20000)
+    return Math.min(1, ms / Math.max(1000, t().turnTimeoutMs))
   }
   const msLeftFor = (seat: number) => {
     const dl = deadline()
@@ -95,6 +99,7 @@ export function TablePage() {
           <For each={t().seats}>
             {(seat) => {
               const [fx, fy] = positions()[seat.seat] ?? [0.5, 0.5]
+              const canJoin = () => t().heroSeat < 0 && !seat.player && store.status === 'open'
               return (
                 <Seat
                   seat={seat}
@@ -102,6 +107,7 @@ export function TablePage() {
                   msLeft={msLeftFor(seat.seat)}
                   frac={fracFor(seat.seat)}
                   isHero={seat.seat === t().heroSeat}
+                  onJoin={canJoin() ? () => store.joinSeat(seat.seat) : undefined}
                   style={`left:${fx * 100}%; top:${fy * 100}%`}
                 />
               )
@@ -119,6 +125,17 @@ export function TablePage() {
       <footer class="flex-none px-3 pb-3 sm:px-6 sm:pb-4">
         <ActionBar table={t()} send={(a) => store.send(a)} error={store.lastError} />
       </footer>
+
+      {/* toasts (7-2 bounty, …) */}
+      <div class="pointer-events-none fixed inset-x-0 top-14 z-50 flex flex-col items-center gap-1.5">
+        <For each={store.toasts}>
+          {(toast) => (
+            <div class="rounded-full border border-accent/40 bg-surface/95 px-4 py-1.5 text-sm font-semibold text-accent shadow-lg">
+              {toast.text}
+            </div>
+          )}
+        </For>
+      </div>
     </div>
   )
 }

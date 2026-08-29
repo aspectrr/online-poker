@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"strconv"
 )
 
 // Card: 0..51. Rank = c>>2 (0=2..12=A), Suit = c&3 (0=s 1=h 2=d 3=c).
@@ -19,6 +20,20 @@ func NewCard(rank, suit int) Card { return Card(rank*4 + suit) }
 
 func (c Card) Rank() int { return int(c) >> 2 }
 func (c Card) Suit() int { return int(c) & 3 }
+
+// MarshalJSON: cards are plain numbers on the wire ([]Card would otherwise
+// base64-encode as if it were []byte).
+func (c Card) MarshalJSON() ([]byte, error) { return []byte(strconv.Itoa(int(c))), nil }
+
+// UnmarshalJSON reads a JSON number back into a Card.
+func (c *Card) UnmarshalJSON(b []byte) error {
+	n, err := strconv.Atoi(string(b))
+	if err != nil {
+		return fmt.Errorf("card: expected number, got %s", b)
+	}
+	*c = Card(n)
+	return nil
+}
 
 func (c Card) String() string {
 	return fmt.Sprintf("%c%c", "23456789TJQKA"[c.Rank()], "shdc"[c.Suit()])

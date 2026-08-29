@@ -1,4 +1,5 @@
 import type { TableConfig, TableSummary } from './types'
+import { authIdentity } from './identity'
 
 /**
  * Typed fetch wrappers. Mock mode: when VITE_API_URL is unset, return fake tables
@@ -8,7 +9,10 @@ const API_URL = import.meta.env.VITE_API_URL
 export const MOCK_MODE = !API_URL
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const id = await authIdentity()
+  const sep = path.includes('?') ? '&' : '?'
+  const auth = id ? `${sep}token=${encodeURIComponent(id.token)}` : ''
+  const res = await fetch(`${API_URL}${path}${auth}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...init?.headers },
   })
