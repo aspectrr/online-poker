@@ -83,7 +83,7 @@ export function CornerIndex(props: { rank: Rank; suit: Suit; ink: string }): JSX
       >
         {RANK_LABEL[props.rank]}
       </text>
-      <g transform="translate(0 21) scale(0.17) translate(-50 -50)">
+      <g transform="translate(0 27) scale(0.17) translate(-50 -50)">
         <SuitPath suit={props.suit} />
       </g>
     </g>
