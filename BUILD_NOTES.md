@@ -268,3 +268,47 @@ Design source of truth: `DESIGN.md` at repo root. Verified via headless Chrome c
 - **Demo** `/cards`: playground (deal/flip/win/chip), corner-legibility strip (sm + 40px), pip showcase, courts+aces, full deck, sizes/back/rabbit.
 
 Known simplifications: system font stack renders corner ranks (Sora not loaded); Vision-OCR can't grade isolated single glyphs, so corner legibility was verified by pixel inspection + geometry, not OCR.
+
+---
+
+---
+
+# BUILD NOTES — ASPTR-188: Table UI (felt, seats, action bar)
+
+All in `web/`. Reuses ASPTR-189 cards (CardRow/Card) + ASPTR-182 tokens/ui-kit. No new deps.
+
+## Store contract (`src/lib/tableTypes.ts`)
+
+ASPTR-181 builds `stores/table.ts` (ws) in parallel; UI codes against `TableStore`:
+
+- `state: TableState` — seats (stack/bet/fold/lastAction/isWinner), board rows, pot, toAct, deadlineUnixMs, `legal: LegalActions | null` (non-null iff hero to act, mirrors engine's raise-TO fields in cents), hero holeCards rows, street/handNo/message, bombPot/isDoubleBoard.
+- `send(PlayerAction)` — fold/check/call/`raise{toCents}` (raise-TO)/reveal/muck/rabbit. Errors surface via `lastError`, never thrown.
+- `WireCard` = engine uint8 (rank=c>>2, suit=c&3) + `toUICard()`. UI card types re-exported from `Card` (`UICard = {rank,suit}`), so wire types and CardRow share one Rank/Suit union.
+
+Swap point is one line in `pages/Table.tsx`: `createMockTable(id)` → real store. Interface owns no mock-isms (no `message`-only errors etc.).
+
+## Mock store (`stores/mockTable.ts`)
+
+Scripted 6-max hand as a flat timeline array (`Step[]`: post/holes/street/villain/hero/award/end) walked by a cursor with per-step delays. Hero steps park until `send()` or a 20s timeout (auto check/fold — exercises the timeout path in UI testing). Button rotates per hand; fixed deck (hero AsKs, board Qs Js 4d Ts 2c) so every street + award replays deterministically. Villain turns get `deadlineUnixMs = now + think + 6s` so arcs render on villains too. ponytail: theater, not a betting model — replaced wholesale by ASPTR-181.
+
+## Components (`src/components/table/`)
+
+- **`Seat.tsx`** — nameplate (name, stack `$.XX`, lastAction tag, dealer `D` chip), face-down backs for villains / real `CardRow` for hero, street-bet chip + amount under plate, fold dim, winner border. Active turn: accent border + glow ring (`glow` keyframe) + timer arc = SVG `rect` stroke-dasharray `frac*280` that drains with a single 250ms clock tick shared page-side; stroke flips to `--danger` under 5s.
+- **`TableCenter.tsx`** — pot chip stack + `$.XX`, board rows (5 slots each, undelt = dashed placeholder, dealt cards get `animate-deal` stagger 110ms), status line. Double board renders N rows labeled A/B (labels from state).
+- **`ActionBar.tsx`** — Fold(F)/Check-Call(C)/Raise-to(R) + presets + slider + typed input. Presets from pure `lib/betting.ts`: preflop unopened 2.5/3.5bb + All-in; vs raise 3x their raise-to + All-in; postflop 33/50/75/100% of pot-after-call + All-in (out-of-range dropped, min/max shown). Arrow keys step bb (preflop) / 10% pot (postflop), shift = 2×. Enter commits raise (or primary action), Esc cancels raise mode. Typed amounts parsed by `parseBetToCents` ("2.5"/"$2.50"→cents, >2 decimals rejected). Slider = Kobalte (note: `minValue`/`maxValue`, not `min`/`max`).
+
+## Page (`pages/Table.tsx`, route `/table/:id`)
+
+Rail: padded wood-gradient ellipse (`rounded-[50%]`) + radial-gradient felt (#1f6f4a→#0b3625) + repeating-linear-gradient texture at 5% opacity + inner white/10 ring. Seats positioned by fraction lookup `SEAT_POS[2..9]` (absolute % on the felt box, `-translate-x-1/2`). Header: lobby link, name, game badge, blinds, hand #/street (+BOMB POT). Footer: ActionBar. `ChipFly` — 6 chips from center to winner seat on `isWinner` (measures felt box at mount, sets `--chip-x/y`). No viewport overflow at 1190×713 or 390×844.
+
+## Verification
+
+- `bun src/lib/betting.check.ts` — assert-based checks: preset math (2.5bb→$0.50, 3x vs $0.60→$1.80, pot-% incl. facing-bet base), step sizes, typed parsing (all green). Excluded from tsc (node `process` in exit path).
+- `tsc -b && vite build` green (236kB js / 76kB gz).
+- chrome-devtools on dev server: full scripted hand observed — blinds post, hole cards render face-up for hero, villains act with labels + thinking arcs, flop/turn/river deal with stagger + dashed slots, presets switch preflop→postflop correctly, `C` calls (hero label updates), arrow+Enter raises, 20s timeout auto-folded hero and hand ran out, award fires 6 `chip-fly` chips + winner glow (in-page 250ms poller caught the 2s window), timer arc drained 280→2 dash with `--danger` at <5s, zero console errors (fixed form-field warning via `name` attr on raise input).
+
+## Not touched / next
+
+- Real ws store (ASPTR-181) — swap-in point above; store contract frozen unless that ticket needs a field.
+- Side-pot display, reveal/muck/rabbit UI hooks exist in types but no controls (engine pauses only when those features are on).
+- `win` glow on winning 5 cards at showdown — state lacks per-card win flags; add when engine events land.
