@@ -1,7 +1,7 @@
 import { Show, splitProps } from 'solid-js'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '../../lib/cn'
-import { SUIT_COLOR, SUIT_INK, CornerIndex, Pips, Court, AceDesign, BackArt } from './art'
+import { SUIT_COLOR, SUIT_INK, CornerIndex, CenterMotif, BackArt } from './art'
 
 export type Suit = 's' | 'h' | 'd' | 'c'
 export type Rank =
@@ -40,9 +40,6 @@ export function CardFace(props: CardFaceProps) {
   const [local] = splitProps(props, ['rank', 'suit', 'class'])
   const color = () => SUIT_COLOR[local.suit]
   const ink = () => SUIT_INK[local.suit]
-  const isCourt = () => local.rank === 'J' || local.rank === 'Q' || local.rank === 'K'
-  const isAce = () => local.rank === 'A'
-  const isPip = () => !isCourt() && !isAce()
 
   return (
     <div class={cn('card-face absolute inset-0 overflow-hidden rounded-[12px] bg-[#fdf9f0]', local.class)}>
@@ -54,16 +51,8 @@ export function CardFace(props: CardFaceProps) {
         <g transform="translate(89 127) rotate(180)">
           <CornerIndex rank={local.rank} suit={local.suit} ink={ink()} />
         </g>
-        {/* center art */}
-        <Show when={isPip()}>
-          <Pips rank={local.rank as Exclude<Rank, 'J' | 'Q' | 'K' | 'A'>} suit={local.suit} color={color()} />
-        </Show>
-        <Show when={isCourt()}>
-          <Court rank={local.rank as 'J' | 'Q' | 'K'} suit={local.suit} color={color()} />
-        </Show>
-        <Show when={isAce()}>
-          <AceDesign suit={local.suit} color={color()} />
-        </Show>
+        {/* center art: one uniform motif on every rank */}
+        <CenterMotif suit={local.suit} color={color()} />
       </svg>
     </div>
   )

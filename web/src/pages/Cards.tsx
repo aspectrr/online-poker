@@ -166,7 +166,7 @@ export function CardsPage() {
         {/* ---- pip layout showcase ---- */}
         <section>
           <h2 class="font-display text-xl font-bold tracking-tight text-fg">Pip layouts</h2>
-          <p class="mt-1 text-sm text-fg-muted">Traditional French positions per rank, one suit column each — bottom-half pips mirrored.</p>
+          <p class="mt-1 text-sm text-fg-muted">Every rank shares one center motif — diagonal rule + suit glyph.</p>
           <div class="mt-5 grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-3">
             <For each={PIP_RANKS}>
               {(rank, i) => (
@@ -182,7 +182,7 @@ export function CardsPage() {
         <section>
           <h2 class="font-display text-xl font-bold tracking-tight text-fg">Courts &amp; aces</h2>
           <p class="mt-1 text-sm text-fg-muted">
-            K bear · Q turtle · J hawk — flat character-mark style. Aces: one designed glyph, ring for negative space.
+            Giant corner ranks; one uniform center motif (rule + suit glyph) on every rank.
           </p>
           <div class="mt-5 flex flex-wrap gap-3">
             <For each={SUITS}>
