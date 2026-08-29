@@ -29,7 +29,7 @@ export function Select(props: SelectProps) {
       itemComponent={(itemProps) => (
         <SelectPrimitive.Item
           item={itemProps.item}
-          class="flex cursor-pointer items-center justify-between rounded-md px-2.5 py-1.5 text-sm text-fg outline-none transition-colors data-[highlighted]:bg-surface-raised"
+          class="flex cursor-pointer items-center justify-between rounded-md px-2.5 py-1.5 text-sm text-fg outline-none transition-colors duration-200 data-[highlighted]:bg-surface-raised"
         >
           <SelectPrimitive.ItemLabel>{itemProps.item.rawValue.label}</SelectPrimitive.ItemLabel>
           <SelectPrimitive.ItemIndicator>
@@ -42,7 +42,7 @@ export function Select(props: SelectProps) {
       {...others}
     >
       <SelectPrimitive.HiddenSelect />
-      <SelectPrimitive.Trigger class="flex h-9 items-center justify-between gap-2 rounded-lg border border-line bg-surface px-3 text-sm text-fg transition-colors hover:bg-surface-raised data-[expanded]:border-accent/60">
+      <SelectPrimitive.Trigger class="flex h-9 items-center justify-between gap-2 rounded-btn border border-line bg-surface px-3 text-sm text-fg transition-colors duration-200 ease-out hover:border-black/20 data-[expanded]:border-accent/60">
         <SelectPrimitive.Value<Option> class="truncate">
           {(state) => <span class="truncate">{state.selectedOption()?.label ?? local.placeholder}</span>}
         </SelectPrimitive.Value>
@@ -53,7 +53,7 @@ export function Select(props: SelectProps) {
         </SelectPrimitive.Icon>
       </SelectPrimitive.Trigger>
       <SelectPrimitive.Portal>
-        <SelectPrimitive.Content class="z-50 max-h-64 overflow-y-auto rounded-lg border border-line bg-surface p-1 shadow-xl shadow-black/40 animate-in-menu">
+        <SelectPrimitive.Content class="z-50 max-h-64 overflow-y-auto rounded-card border border-line bg-surface p-1 animate-in-menu">
           <SelectPrimitive.Listbox />
         </SelectPrimitive.Content>
       </SelectPrimitive.Portal>
@@ -67,7 +67,7 @@ export function Field(props: ParentProps<{ label: string; hint?: string; class?:
     <label class={cn('flex flex-col gap-1.5 text-sm', props.class)}>
       <span class="text-xs font-medium tracking-wide text-fg-muted uppercase">{props.label}</span>
       {props.children}
-      {props.hint && <span class="text-xs text-fg-muted/70">{props.hint}</span>}
+      {props.hint && <span class="text-xs text-fg-faint">{props.hint}</span>}
     </label>
   )
 }

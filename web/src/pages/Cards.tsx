@@ -55,11 +55,11 @@ export function CardsPage() {
   }
 
   return (
-    <div class="min-h-dvh felt-bg">
-      <header class="border-b border-line/60 bg-bg/70 backdrop-blur-md sticky top-0 z-40">
+    <div class="min-h-dvh bg-bg">
+      <header class="sticky top-0 z-40 border-b border-line bg-surface/90 backdrop-blur-md shadow-[0px_0.7px_1.462px_0px_rgb(0_0_0/0.015),0px_3px_9px_0px_rgb(0_0_0/0.03)]">
         <div class="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
           <A href="/" class="flex items-center gap-2.5">
-            <span class="grid size-8 place-items-center rounded-lg bg-accent/15 text-accent ring-1 ring-accent/30">
+            <span class="grid size-8 place-items-center rounded-btn bg-accent-tint text-accent">
               <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                 <path d="M4 9c5.5 0 10.5-2 16-2v10c-5.5 0-10.5 2-16 2V9Z" />
                 <path d="M4 11c1.5 0 2.5 1 2.5 2S5.5 15 4 15" />
@@ -67,7 +67,7 @@ export function CardsPage() {
             </span>
             <span class="font-display text-base font-bold tracking-tight text-fg">aspectrr</span>
           </A>
-          <span class="rounded-full border border-line bg-surface px-2.5 py-0.5 text-xs font-medium text-fg-muted">
+          <span class="rounded-pill border border-line bg-surface px-2.5 py-0.5 text-xs font-medium text-fg-muted">
             /cards · ASPTR-189
           </span>
         </div>
@@ -79,9 +79,9 @@ export function CardsPage() {
           <h2 class="font-display text-xl font-bold tracking-tight text-fg">Playground</h2>
           <p class="mt-1 text-sm text-fg-muted">Deal, flip, win pulse, chip fly — the pieces the table view will compose.</p>
 
-          <div class="relative mt-6 overflow-hidden rounded-2xl border border-line bg-[radial-gradient(ellipse_90%_80%_at_50%_0%,#1b3a2a_0%,#12291d_60%,#0e2016_100%)] p-8 sm:p-12">
+          <div class="relative mt-6 overflow-hidden rounded-card border border-line bg-accent-tint p-8 sm:p-12">
             {/* rail ellipse hint */}
-            <div class="pointer-events-none absolute inset-x-10 top-1/2 h-40 -translate-y-1/2 rounded-[50%] border border-white/5" />
+            <div class="pointer-events-none absolute inset-x-10 top-1/2 h-40 -translate-y-1/2 rounded-[50%] border border-black/5" />
 
             <div class="flex flex-col items-center gap-8">
               {/* hero hole cards */}
@@ -104,7 +104,7 @@ export function CardsPage() {
                   {/* empty board slots */}
                   <For each={new Array(5 - board().length).fill(0)}>
                     {() => (
-                      <div class="h-[124px] w-[88px] rounded-lg border border-dashed border-white/10" />
+                      <div class="h-[124px] w-[88px] rounded-lg border border-dashed border-black/15" />
                     )}
                   </For>
                 </div>
@@ -173,7 +173,7 @@ export function CardsPage() {
         <section>
           <h2 class="font-display text-xl font-bold tracking-tight text-fg">Sizes &amp; back</h2>
           <p class="mt-1 text-sm text-fg-muted">sm / md / lg, and the felt-lattice back.</p>
-          <div class="mt-5 flex flex-wrap items-end gap-8 rounded-2xl border border-line bg-surface p-8">
+          <div class="mt-5 flex flex-wrap items-end gap-8 rounded-card border border-line bg-surface p-8">
             <Card rank="A" suit="s" size="sm" />
             <Card rank="K" suit="h" size="md" />
             <Card rank="Q" suit="d" size="lg" />

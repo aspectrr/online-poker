@@ -1,20 +1,34 @@
 @import 'tailwindcss';
 @import './styles/animations.css';
 
-/* Design tokens — dark felt-green poker theme */
+/* Design tokens — Notion warm-light theme (DESIGN.md) */
 :root {
-  --bg: #0e1512;
-  --surface: #16211c;
-  --surface-raised: #1c2a23;
-  --border: #2a3b33;
-  --text: #e8ede9;
-  --text-muted: #93a69b;
-  --accent: #d4af37;
-  --accent-hover: #e3c25a;
-  --accent-foreground: #14201a;
-  --danger: #e05252;
-  --success: #4cc38a;
-  --focus-ring: #d4af3766;
+  /* Surfaces */
+  --bg: #f6f5f4; /* paper warmth — page canvas */
+  --surface: #ffffff; /* card surface */
+  --surface-raised: #f1f0ef; /* hover fill / inactive track on white */
+  --border: rgba(0, 0, 0, 0.08); /* hairline */
+
+  /* Ink hierarchy via alpha on black */
+  --text: rgba(0, 0, 0, 0.95);
+  --text-muted: rgba(0, 0, 0, 0.6);
+  --text-faint: rgba(0, 0, 0, 0.4);
+
+  /* Primary + accents */
+  --accent: #0075de; /* notion blue — the single chromatic CTA */
+  --accent-hover: #0a84ec;
+  --accent-foreground: #ffffff;
+  --accent-tint: #e6f3fe; /* sky tint — ghost CTA bg */
+
+  /* Accent cast (card backgrounds, pips, highlights) */
+  --marigold: #ffb110;
+  --coral: #f64932;
+  --sky-wash: #62aef0;
+  --midnight: #02093a;
+
+  --danger: #e32d14; /* vermillion */
+  --success: #12805c; /* ponytail: readable green on light canvas */
+  --focus-ring: #0075de66;
 }
 
 /* Map tokens to Tailwind theme (v4 CSS-first config) */
@@ -25,14 +39,54 @@
   --color-line: var(--border);
   --color-fg: var(--text);
   --color-fg-muted: var(--text-muted);
+  --color-fg-faint: var(--text-faint);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-fg: var(--accent-foreground);
+  --color-accent-tint: var(--accent-tint);
   --color-danger: var(--danger);
   --color-success: var(--success);
+  --color-marigold: var(--marigold);
+  --color-coral: var(--coral);
+  --color-sky-wash: var(--sky-wash);
+  --color-midnight: var(--midnight);
 
-  --font-sans: 'Inter var', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-display: 'Sora', 'Inter var', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Type scale per DESIGN.md — negative tracking at display sizes */
+@theme {
+  --text-caption: 12px;
+  --text-caption--line-height: 1.33;
+  --text-caption--letter-spacing: 0.12px;
+  --text-body-sm: 14px;
+  --text-body-sm--line-height: 1.43;
+  --text-body: 16px;
+  --text-body--line-height: 1.5;
+  --text-subheading: 20px;
+  --text-subheading--line-height: 1;
+  --text-heading-sm: 22px;
+  --text-heading-sm--line-height: 1.27;
+  --text-heading-sm--letter-spacing: -0.242px;
+  --text-heading: 40px;
+  --text-heading--line-height: 1.5;
+  --text-heading-lg: 48px;
+  --text-heading-lg--line-height: 1.5;
+  --text-display-sm: 54px;
+  --text-display-sm--line-height: 1.04;
+  --text-display-sm--letter-spacing: -1.89px;
+  --text-display: 72px;
+  --text-display--line-height: 1.21;
+  --text-display--letter-spacing: -2.016px;
+  --text-display-lg: 96px;
+  --text-display-lg--line-height: 1.04;
+  --text-display-lg--letter-spacing: -4.608px;
+
+  --radius-card: 12px;
+  --radius-btn: 8px;
+  --radius-small: 4px;
+  --radius-pill: 9999px;
 }
 
 html,
@@ -44,18 +98,12 @@ body {
   background-color: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
+  font-feature-settings: 'lnum' 1;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Subtle felt vignette on the app root */
-.felt-bg {
-  background:
-    radial-gradient(ellipse 80% 60% at 50% -10%, #1a2921 0%, transparent 60%),
-    var(--bg);
-}
-
 ::selection {
-  background: #d4af3744;
+  background: #0075de33;
 }
 
 /* Focus visibility for keyboard users on custom controls */

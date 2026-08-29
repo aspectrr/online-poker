@@ -15,7 +15,7 @@ export function DialogOverlay(props: DialogOverlayProps) {
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay
         class={cn(
-          'fixed inset-0 z-50 bg-black/60 backdrop-blur-sm animate-in-fade',
+          'fixed inset-0 z-50 bg-black/30 animate-in-fade',
           local.class,
         )}
         {...others}
@@ -37,12 +37,12 @@ export function DialogContent(props: DialogContentProps) {
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay
-        class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm animate-in-fade"
+        class="fixed inset-0 z-50 bg-black/30 animate-in-fade"
       />
       <DialogPrimitive.Content
         class={cn(
           'fixed left-1/2 top-1/2 z-50 max-h-[85vh] w-[min(92vw,40rem)] -translate-x-1/2 -translate-y-1/2',
-          'flex flex-col rounded-2xl border border-line bg-surface shadow-2xl shadow-black/50 animate-in-pop',
+          'flex flex-col rounded-card border border-line bg-surface animate-in-pop',
           local.class,
         )}
         {...others}
@@ -59,7 +59,7 @@ export function DialogContent(props: DialogContentProps) {
             )}
           </div>
           <DialogPrimitive.CloseButton
-            class="rounded-md p-1 text-fg-muted transition-colors hover:bg-surface-raised hover:text-fg"
+            class="rounded-md p-1 text-fg-muted transition-colors duration-200 hover:bg-surface-raised hover:text-fg"
             aria-label="Close dialog"
           >
             <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">

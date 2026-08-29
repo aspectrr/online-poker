@@ -26,10 +26,10 @@ export function AuthPage() {
   }
 
   return (
-    <div class="grid min-h-dvh place-items-center felt-bg px-4">
+    <div class="grid min-h-dvh place-items-center bg-bg px-4">
       <div class="w-full max-w-sm">
         <A href="/" class="mb-8 flex items-center justify-center gap-2.5">
-          <span class="grid size-9 place-items-center rounded-lg bg-accent/15 text-accent ring-1 ring-accent/30">
+          <span class="grid size-9 place-items-center rounded-btn bg-accent-tint text-accent">
             <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
               <path d="M4 9c5.5 0 10.5-2 16-2v10c-5.5 0-10.5 2-16 2V9Z" />
               <path d="M4 11c1.5 0 2.5 1 2.5 2S5.5 15 4 15" />
@@ -38,15 +38,15 @@ export function AuthPage() {
           <span class="font-display text-lg font-bold tracking-tight text-fg">aspectrr</span>
         </A>
 
-        <div class="rounded-2xl border border-line bg-surface p-6 shadow-xl shadow-black/30">
+        <div class="rounded-card border border-line bg-surface p-6">
           <Show
             when={client}
             fallback={
               <div class="text-center">
                 <h1 class="font-display text-lg font-semibold text-fg">Sign-in unavailable</h1>
                 <p class="mt-2 text-sm leading-relaxed text-fg-muted">
-                  Supabase isn’t configured. Set <code class="rounded bg-bg px-1.5 py-0.5 text-xs text-accent">VITE_SUPABASE_URL</code> and{' '}
-                  <code class="rounded bg-bg px-1.5 py-0.5 text-xs text-accent">VITE_SUPABASE_ANON_KEY</code>, then reload.
+                  Supabase isn’t configured. Set <code class="rounded-small bg-surface-raised px-1.5 py-0.5 text-xs text-fg">VITE_SUPABASE_URL</code> and{' '}
+                  <code class="rounded-small bg-surface-raised px-1.5 py-0.5 text-xs text-fg">VITE_SUPABASE_ANON_KEY</code>, then reload.
                 </p>
               </div>
             }
@@ -55,7 +55,7 @@ export function AuthPage() {
               when={!sent()}
               fallback={
                 <div class="text-center">
-                  <span class="mx-auto grid size-12 place-items-center rounded-full bg-success/15 text-success ring-1 ring-success/30">
+                  <span class="mx-auto grid size-12 place-items-center rounded-pill bg-accent-tint text-accent">
                     <svg class="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M4 6h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" />
                       <path d="m22 10-10 5L2 10" stroke-linejoin="round" />
