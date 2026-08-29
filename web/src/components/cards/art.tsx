@@ -161,22 +161,24 @@ function CourtBear(props: { suit: Suit; color: string }): JSX.Element {
       <circle cx="42" cy="99" r="1.1" fill={CREAM} />
       <circle cx="50" cy="99" r="1.3" fill={CREAM} />
       <circle cx="58" cy="99" r="1.1" fill={CREAM} />
+      {/* cream chest patch */}
+      <ellipse cx="50" cy="107.5" rx="8" ry="5" fill={CREAM} />
       {/* ears */}
-      <circle cx="35" cy="52" r="7" fill={ink} />
-      <circle cx="65" cy="52" r="7" fill={ink} />
-      <circle cx="35" cy="52" r="3" fill={CREAM} />
-      <circle cx="65" cy="52" r="3" fill={CREAM} />
+      <circle cx="35.5" cy="50" r="7" fill={ink} />
+      <circle cx="64.5" cy="50" r="7" fill={ink} />
+      <circle cx="35.5" cy="50" r="3.2" fill={CREAM} />
+      <circle cx="64.5" cy="50" r="3.2" fill={CREAM} />
       {/* head */}
-      <circle cx="50" cy="65" r="19" fill={ink} />
+      <circle cx="50" cy="64" r="18" fill={ink} />
       {/* muzzle */}
-      <ellipse cx="50" cy="72" rx="9.5" ry="7" fill={CREAM} />
-      <ellipse cx="50" cy="68.5" rx="3" ry="2.4" fill="#1c1c1c" />
-      <path d="M50 71v3M50 74l-2.6 2M50 74l2.6 2" stroke="#1c1c1c" stroke-width="1.1" fill="none" stroke-linecap="round" />
-      {/* eyes */}
-      <circle cx="43" cy="61" r="2.2" fill="#1c1c1c" />
-      <circle cx="57" cy="61" r="2.2" fill="#1c1c1c" />
-      <circle cx="43.7" cy="60.3" r="0.7" fill="#fff" />
-      <circle cx="57.7" cy="60.3" r="0.7" fill="#fff" />
+      <ellipse cx="50" cy="71.5" rx="10" ry="7.5" fill={CREAM} />
+      <ellipse cx="50" cy="68" rx="3.1" ry="2.5" fill="#1c1c1c" />
+      <path d="M50 70.5v3M50 73.5l-2.6 2M50 73.5l2.6 2" stroke="#1c1c1c" stroke-width="1.1" fill="none" stroke-linecap="round" />
+      {/* eyes — white sclera so they survive dark fills */}
+      <circle cx="42.5" cy="60" r="2.6" fill={CREAM} />
+      <circle cx="57.5" cy="60" r="2.6" fill={CREAM} />
+      <circle cx="42.9" cy="60.4" r="1.3" fill="#1c1c1c" />
+      <circle cx="57.9" cy="60.4" r="1.3" fill="#1c1c1c" />
       {/* crown */}
       <path d="M40 44v-8l5.5 4L50 32l4.5 8L60 36v8Z" fill={GOLD} stroke={GOLD_DARK} stroke-width="0.7" />
       <circle cx="50" cy="30.5" r="1.6" fill={GOLD} stroke={GOLD_DARK} stroke-width="0.6" />
@@ -186,43 +188,39 @@ function CourtBear(props: { suit: Suit; color: string }): JSX.Element {
   )
 }
 
-/** Queen — turtle with tiara */
+/** Queen — turtle with tiara: wide patterned shell, side flippers, small head */
 function CourtTurtle(props: { suit: Suit; color: string }): JSX.Element {
   const ink = props.color
   return (
     <g>
       <Panel suit={props.suit} color={ink} />
-      {/* shell dome */}
-      <path d="M30 110v-6c0-13 9-21 20-21s20 8 20 21v6Z" fill={ink} />
-      {/* shell scallops */}
-      <path d="M36 102q4-7 7 0M43 102q4-7 7 0M50 102q4-7 7 0M57 102q4-7 7 0" stroke={CREAM} stroke-width="1.1" fill="none" stroke-linecap="round" opacity="0.85" />
-      {/* shell rim */}
-      <path d="M30 104h40" stroke={GOLD} stroke-width="1.6" />
-      <circle cx="36" cy="104" r="1" fill={GOLD} />
-      <circle cx="50" cy="104" r="1" fill={GOLD} />
-      <circle cx="64" cy="104" r="1" fill={GOLD} />
-      {/* head */}
-      <circle cx="50" cy="66" r="15" fill={ink} />
-      {/* tiara */}
-      <path d="M43 54l2.5-7 4.5 5 4.5-5 2.5 7Z" fill={GOLD} stroke={GOLD_DARK} stroke-width="0.6" />
-      <circle cx="50" cy="44.5" r="1.4" fill={GOLD} stroke={GOLD_DARK} stroke-width="0.5" />
-      {/* face */}
-      <circle cx="44.5" cy="64" r="2" fill="#1c1c1c" />
-      <circle cx="55.5" cy="64" r="2" fill="#1c1c1c" />
-      <circle cx="45.2" cy="63.3" r="0.65" fill="#fff" />
-      <circle cx="56.2" cy="63.3" r="0.65" fill="#fff" />
-      <path d="M47 70q3 2.4 6 0" stroke="#1c1c1c" stroke-width="1.1" fill="none" stroke-linecap="round" />
-      <circle cx="42.5" cy="68" r="1.8" fill={GOLD} opacity="0.4" />
-      <circle cx="57.5" cy="68" r="1.8" fill={GOLD} opacity="0.4" />
-      {/* necklace */}
-      <circle cx="45" cy="83" r="1.2" fill={CREAM} />
-      <circle cx="50" cy="84.5" r="1.2" fill={CREAM} />
-      <circle cx="55" cy="83" r="1.2" fill={CREAM} />
+      {/* head — pokes above the shell */}
+      <circle cx="50" cy="55" r="10.5" fill={ink} />
+      <circle cx="46" cy="54" r="1.7" fill="#1c1c1c" />
+      <circle cx="54" cy="54" r="1.7" fill="#1c1c1c" />
+      <circle cx="46.6" cy="53.4" r="0.55" fill="#fff" />
+      <circle cx="54.6" cy="53.4" r="0.55" fill="#fff" />
+      <path d="M47.5 59q2.5 2 5 0" stroke="#1c1c1c" stroke-width="1" fill="none" stroke-linecap="round" />
+      <circle cx="43.5" cy="57" r="1.5" fill={GOLD} opacity="0.45" />
+      <circle cx="56.5" cy="57" r="1.5" fill={GOLD} opacity="0.45" />
+      {/* tiara — 3 points + pearls, clearly a crown */}
+      <path d="M43.5 47.5l1.5-6 3.5 3.5L50 38l1.5 7 3.5-3.5 1.5 6Z" fill={GOLD} stroke={GOLD_DARK} stroke-width="0.6" />
+      <circle cx="50" cy="36.5" r="1.3" fill={GOLD} stroke={GOLD_DARK} stroke-width="0.5" />
+      {/* shell — wide half-dome */}
+      <path d="M24 104c0-14 11.5-24 26-24s26 10 26 24l-1.5 6h-49Z" fill={ink} />
+      {/* shell plates */}
+      <path d="M50 80l9 6-3.5 9h-11L41 86Z M36 84l7 5-3 8h-9l-2.5-6Z M64 84l-7 5 3 8h9l2.5-6Z" fill={CREAM} opacity="0.9" />
+      {/* cream belly band */}
+      <path d="M25.5 104h49l-1 4c-8 3-17 4.5-23.5 4.5S34.5 111 26.5 108Z" fill={CREAM} />
+      <path d="M25.5 104h49l-1 4c-8 3-17 4.5-23.5 4.5S34.5 111 26.5 108Z" fill="none" stroke={GOLD} stroke-width="1" />
+      {/* flippers */}
+      <path d="M26 92c-4 2-6 6-5 10l7-2c-1.5-2.5-2-5-2-8Z" fill={ink} />
+      <path d="M74 92c4 2 6 6 5 10l-7-2c1.5-2.5 2-5 2-8Z" fill={ink} />
     </g>
   )
 }
 
-/** Jack — hawk with cap */
+/** Jack — hawk with cap: beanie hugging the head, hooked beak, raptor face */
 function CourtHawk(props: { suit: Suit; color: string }): JSX.Element {
   const ink = props.color
   return (
@@ -230,26 +228,31 @@ function CourtHawk(props: { suit: Suit; color: string }): JSX.Element {
       <Panel suit={props.suit} color={ink} />
       {/* shoulders + chest */}
       <path d="M31 110v-8c0-11 8.5-16 19-16s19 5 19 16v8Z" fill={ink} />
-      <ellipse cx="50" cy="104" rx="10" ry="7.5" fill={CREAM} />
-      <path d="M45 101q2.5 2 5 0M50 101q2.5 2 5 0M45 105q2.5 2 5 0M50 105q2.5 2 5 0" stroke="#00000030" stroke-width="0.8" fill="none" stroke-linecap="round" />
+      <ellipse cx="50" cy="105" rx="10" ry="7" fill={CREAM} />
+      <path d="M45 102q2.5 2 5 0M50 102q2.5 2 5 0M45 106q2.5 2 5 0M50 106q2.5 2 5 0" stroke="#00000030" stroke-width="0.8" fill="none" stroke-linecap="round" />
       {/* head */}
-      <circle cx="50" cy="64" r="16" fill={ink} />
-      {/* fierce brow + eyes */}
-      <path d="M40 58l8 2.5M60 58l-8 2.5" stroke="#1c1c1c" stroke-width="1.6" stroke-linecap="round" />
-      <circle cx="44" cy="64" r="2.8" fill={CREAM} />
-      <circle cx="56" cy="64" r="2.8" fill={CREAM} />
-      <circle cx="44.6" cy="64.4" r="1.5" fill="#1c1c1c" />
-      <circle cx="56.6" cy="64.4" r="1.5" fill="#1c1c1c" />
-      <circle cx="45.1" cy="63.8" r="0.5" fill="#fff" />
-      <circle cx="57.1" cy="63.8" r="0.5" fill="#fff" />
-      {/* hooked beak */}
-      <path d="M50 66l7 4.5c-.5 4-3.5 6-7 5.5 1.8-2.5 2-6 0-10Z" fill={GOLD} stroke={GOLD_DARK} stroke-width="0.6" />
-      {/* tilted cap */}
-      <path d="M35 55c1-7 7-11 15-11s14 4 15 11l.5 2.5h-31Z" fill={GOLD} stroke={GOLD_DARK} stroke-width="0.7" />
-      <path d="M34.5 57.5h31c.8 1.6-.5 3-2.5 3h-26c-2 0-3.3-1.4-2.5-3Z" fill={GOLD_DARK} />
-      <circle cx="50" cy="43" r="1.8" fill={CREAM} stroke={GOLD_DARK} stroke-width="0.5" />
-      {/* feather */}
-      <path d="M63 46c5-6 10-8 14-7-1 5-4 9-9 11Z" fill={ink} opacity="0.9" />
+      <circle cx="50" cy="62" r="16" fill={ink} />
+      {/* cream face patch — raptor mask breaks the dark mass */}
+      <path d="M50 50c6 0 11 5 11 11 0 6-5 10-11 10s-11-4-11-10c0-6 5-11 11-11Z" fill={CREAM} opacity="0.92" />
+      {/* fierce brows + eyes */}
+      <path d="M39.5 55.5l9 3M60.5 55.5l-9 3" stroke="#1c1c1c" stroke-width="1.7" stroke-linecap="round" />
+      <circle cx="44" cy="62" r="2.9" fill="#fff" />
+      <circle cx="56" cy="62" r="2.9" fill="#fff" />
+      <circle cx="44.7" cy="62.5" r="1.6" fill="#1c1c1c" />
+      <circle cx="56.7" cy="62.5" r="1.6" fill="#1c1c1c" />
+      <circle cx="45.2" cy="61.9" r="0.5" fill="#fff" />
+      <circle cx="57.2" cy="61.9" r="0.5" fill="#fff" />
+      {/* hooked beak — compact, obvious hook */}
+      <path d="M46.5 66.5h6.5c1.6 0 2.8 1.1 2.8 2.7 0 3.6-2.2 6.6-5.6 7.6 1.6-2.8 0.8-6.6-3.7-10.3Z" fill={GOLD} stroke={GOLD_DARK} stroke-width="0.7" />
+      <path d="M48.5 68.5h3.6" stroke={GOLD_DARK} stroke-width="0.6" stroke-linecap="round" />
+      {/* beanie hugging the head */}
+      <path d="M35 54c1.5-8.5 7.5-13.5 15-13.5S63.5 45.5 65 54l.3 2H34.7Z" fill={GOLD} stroke={GOLD_DARK} stroke-width="0.7" />
+      <path d="M34.5 56h31.3c.9 1.7-.4 3.2-2.4 3.2H36.9c-2 0-3.3-1.5-2.4-3.2Z" fill={GOLD_DARK} />
+      <path d="M42 46.5q8-5 16 0" stroke={GOLD_DARK} stroke-width="0.8" fill="none" stroke-opacity="0.55" />
+      <circle cx="50" cy="41.5" r="1.7" fill={CREAM} stroke={GOLD_DARK} stroke-width="0.5" />
+      {/* feather plume — clearly separate, sticking up-right */}
+      <path d="M63 42c4-7 9-10 14-10-0.5 6-3.5 11-9 13.5Z" fill={ink} opacity="0.92" />
+      <path d="M63.5 43.5c4-5.5 8-8.5 12-9.5" stroke={CREAM} stroke-width="0.7" fill="none" stroke-opacity="0.6" />
     </g>
   )
 }
