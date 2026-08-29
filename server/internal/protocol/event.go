@@ -26,6 +26,7 @@ const (
 	EvSevenDeuceBounty = engine.EvSevenDeuceBounty
 	EvRabbitHunt       = engine.EvRabbitHunt
 	EvHandEnded        = engine.EvHandEnded
+	EvBombPotArmed     = engine.EvBombPotArmed
 )
 
 type (

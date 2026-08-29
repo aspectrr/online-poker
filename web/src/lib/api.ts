@@ -31,7 +31,43 @@ let mockTables: TableSummary[] = [
 
 export function listTables(): Promise<TableSummary[]> {
   if (MOCK_MODE) return Promise.resolve([...mockTables])
-  return req<TableSummary[]>('/tables')
+  return req<unknown[]>('/api/tables').then((rows) => rows.map((r) => rowToSummary(r as Record<string, unknown>)))
+}
+
+/** server store.GameTable row (no json tags on the struct → Go field names) */
+function rowToSummary(r: Record<string, unknown>): TableSummary {
+  const cfg = (r.Config ?? {}) as Record<string, unknown>
+  const blinds = (cfg.blinds_sb_bb as number[] | undefined) ?? [10, 20]
+  return {
+    id: String(r.ID ?? r.id ?? ''),
+    name: String(r.Name ?? r.name ?? 'table'),
+    gameType: r.GameType === 'PLO4' || r.game_type === 'PLO4' ? 'PLO4' : 'NLHE',
+    smallBlindCents: blinds[0],
+    bigBlindCents: blinds[1],
+    seatsFilled: 0,
+    maxSeats: Number(cfg.max_seats ?? 9),
+  }
+}
+
+/** UI config -> server store.TableConfig jsonb (snake_case, ranks 2-14). */
+function configToWire(c: TableConfig): Record<string, unknown> {
+  const rankWire = (rank: string): number | null => (rank === 'any' ? null : '23456789TJQKA'.indexOf(rank) + 2)
+  const suitWire = (suit: string): number | null => (suit === 'any' ? null : 'shdc'.indexOf(suit))
+  return {
+    blinds_sb_bb: [c.smallBlindCents, c.bigBlindCents],
+    starting_stack_bb: c.startingStackBb,
+    action_timeout_s: c.actionTimeoutSec,
+    inter_hand_delay_s: c.interHandDelaySec,
+    rit: c.runItTwice === 'always' ? 'always' : 'never',
+    rabbit_hunt: c.rabbitHunt,
+    bomb_pot_mode: c.bombPotMode === 'every_hand' ? 'manual' : c.bombPotMode,
+    bomb_pot_triggers:
+      c.bombPotMode === 'trigger' && c.bombPotTrigger && (c.bombPotTrigger.rank !== 'any' || c.bombPotTrigger.suit !== 'any')
+        ? [{ rank: rankWire(c.bombPotTrigger.rank), suit: suitWire(c.bombPotTrigger.suit) }].filter((t) => t.rank != null)
+        : [],
+    seven_deuce: c.sevenTwo,
+    seven_deuce_bounty: c.sevenTwoBountyCents,
+  }
 }
 
 export function createTable(config: TableConfig): Promise<TableSummary> {
@@ -48,7 +84,10 @@ export function createTable(config: TableConfig): Promise<TableSummary> {
     mockTables = [...mockTables, t]
     return Promise.resolve(t)
   }
-  return req<TableSummary>('/tables', { method: 'POST', body: JSON.stringify(config) })
+  return req<Record<string, unknown>>('/api/tables', {
+    method: 'POST',
+    body: JSON.stringify({ name: config.name || 'New Table', game_type: config.gameType, config: configToWire(config) }),
+  }).then(rowToSummary)
 }
 
 /** ponytail: join is a stub until the table view route exists; wire to WS seat-take later. */

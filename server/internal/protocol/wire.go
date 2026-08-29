@@ -1,15 +1,15 @@
 package protocol
 
-// Wire envelope for the WS connection. Client->server messages carry a
-// command; server->client carry either a snapshot or an event.
+// ClientMsg is everything a client can send. Exactly one command per msg.
 type ClientMsg struct {
-	Type   string `json:"type"` // join | leave | action | chat | rabbit
+	Type   string `json:"type"`   // join | leave | action | chat | rabbit | bomb_pot | dev_deal
 	Seat   int    `json:"seat,omitempty"`
 	Name   string `json:"name,omitempty"`
-	Kind   string `json:"kind,omitempty"` // fold | check | call | bet (raise-TO)
+	Kind   string `json:"kind,omitempty"`   // fold | check | call | bet (raise-TO)
 	Amount int64  `json:"amount,omitempty"`
 	Text   string `json:"text,omitempty"`
 	Reveal *bool  `json:"reveal,omitempty"` // 7-2 uncontested decision
+	Cards  []Card `json:"cards,omitempty"`  // dev_deal: forced hole cards
 }
 
 // ServerMsg is everything the server sends. Exactly one payload is set.
@@ -41,15 +41,31 @@ type TableState struct {
 	DeadlineUnixMs int64         `json:"deadline_unix_ms,omitempty"`
 	LegalActions   *LegalActions `json:"legal_actions,omitempty"`
 	HandInProgress bool          `json:"hand_in_progress"`
+	BombPotNext    bool          `json:"bomb_pot_next,omitempty"` // next hand is an armed bomb pot
+	BombPot        bool          `json:"bomb_pot,omitempty"`     // current hand is a bomb pot
 }
 
-// ConfigWire: subset of table config the client renders.
+// ConfigWire: subset of table config the client renders (settings drawer).
 type ConfigWire struct {
-	GameType       string `json:"game_type"` // NLHE | PLO4
-	SmallBlind     int64  `json:"small_blind"`
-	BigBlind       int64  `json:"big_blind"`
-	MaxSeats       int    `json:"max_seats"`
-	ActionTimeoutS int    `json:"action_timeout_s"`
+	GameType        string        `json:"game_type"` // NLHE | PLO4
+	SmallBlind      int64         `json:"small_blind"`
+	BigBlind        int64         `json:"big_blind"`
+	MaxSeats        int           `json:"max_seats"`
+	ActionTimeoutS  int           `json:"action_timeout_s"`
+	InterHandDelayS int           `json:"inter_hand_delay_s"`
+	RIT             string        `json:"rit"`
+	RabbitHunt      bool          `json:"rabbit_hunt"`
+	SevenDeuce      bool          `json:"seven_deuce"`
+	SevenDeuceBounty int64        `json:"seven_deuce_bounty"`
+	BombPotMode     string        `json:"bomb_pot_mode"` // off | manual | trigger
+	BombPotTriggers []TriggerWire `json:"bomb_pot_triggers,omitempty"`
+}
+
+// TriggerWire: bomb-pot card trigger for display.
+type TriggerWire struct {
+	Rank  *int   `json:"rank,omitempty"`   // 2..14
+	Suit  *int   `json:"suit,omitempty"`   // 0..3
+	Color string `json:"color,omitempty"` // red | black
 }
 
 // SeatWire: one seat's public state.

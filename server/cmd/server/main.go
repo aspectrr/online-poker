@@ -5,11 +5,15 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aspectrr/online-poker/server/internal/auth"
@@ -51,11 +55,11 @@ func main() {
 		}
 		defer st.Close()
 	}
-	mgr = table.NewManager(st) // nil store = no persistence (dev)
-
 	devAuth := os.Getenv("DEV_AUTH") == "1"
-	// Without a database, DEV_AUTH mode serves one fixed in-memory table so
-	// the full join/play flow runs backendless.
+	mgr = table.NewManager(st) // nil store = no persistence (dev)
+	mgr.DevMode = devAuth
+
+	// Fixed no-DB dev table: RIT always, 7-2 on, bomb pot on queens.
 	devRow := func() *store.GameTable {
 		return &store.GameTable{
 			ID:       "dev-table",
@@ -69,11 +73,95 @@ func main() {
 				RIT:              "always",
 				RabbitHunt:       true,
 				BombPotMode:      "trigger",
-				BombPotTriggers:  []store.BombPotTrigger{{Rank: intPtr(12)}}, // aces dealt -> next hand bomb pot
+				BombPotTriggers:  []store.BombPotTrigger{{Rank: intPtr(12)}}, // queens dealt -> next hand bomb pot
 				SevenDeuce:       true,
 				SevenDeuceBounty: 100,
 				MaxSeats:         6,
 			},
+		}
+	}
+
+	// Without a database, DEV_AUTH mode serves in-memory tables so the full
+	// create/join/play flow runs backendless. dev-table is always present.
+	postTables := func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "creating tables needs a database", http.StatusServiceUnavailable)
+	}
+	getTables := func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "no database configured", http.StatusServiceUnavailable)
+	}
+	getTable := func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "not found", http.StatusNotFound)
+	}
+	// devLookup: dev-mode row lookup for the WS path (set when dev tables on)
+	var devLookup func(id string) *store.GameTable
+	if devAuth && st == nil {
+		var mu sync.Mutex
+		created := map[string]store.GameTable{}
+		// lookup shared by REST GET and the WS upgrade path
+		devRowByID := func(id string) *store.GameTable {
+			mu.Lock()
+			defer mu.Unlock()
+			if id == "dev-table" {
+				return devRow()
+			}
+			if row, ok := created[id]; ok {
+				return &row
+			}
+			return nil
+		}
+		getTables = func(w http.ResponseWriter, _ *http.Request) {
+			mu.Lock()
+			defer mu.Unlock()
+			rows := []*store.GameTable{devRow()}
+			for id := range created {
+				row := created[id]
+				rows = append(rows, &row)
+			}
+			writeJSON(w, http.StatusOK, rows)
+		}
+		getTable = func(w http.ResponseWriter, r *http.Request) {
+			row := devRowByID(r.PathValue("id"))
+			if row == nil {
+				http.Error(w, "not found", http.StatusNotFound)
+				return
+			}
+			writeJSON(w, http.StatusOK, row)
+		}
+		devLookup = devRowByID
+		postTables = func(w http.ResponseWriter, r *http.Request) {
+			var req struct {
+				Name     string          `json:"name"`
+				GameType string          `json:"game_type"`
+				Config   json.RawMessage `json:"config"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "bad json", http.StatusBadRequest)
+				return
+			}
+			var cfg store.TableConfig
+			if len(req.Config) > 0 {
+				if err := json.Unmarshal(req.Config, &cfg); err != nil {
+					http.Error(w, "bad config", http.StatusBadRequest)
+					return
+				}
+			}
+			cfg.ApplyDefaults()
+			if err := cfg.Validate(); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			uid := auth.UserID(r.Context())
+			row := store.GameTable{
+				ID:       "dev-" + newDevID(),
+				Name:     req.Name,
+				GameType: req.GameType,
+				Config:   cfg,
+				CreatedBy: &uid,
+			}
+			mu.Lock()
+			created[row.ID] = row
+			mu.Unlock()
+			writeJSON(w, http.StatusCreated, row)
 		}
 	}
 
@@ -85,7 +173,7 @@ func main() {
 	}
 	mux.Handle("POST /api/tables", handle(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if st == nil {
-			http.Error(w, "creating tables needs a database", http.StatusServiceUnavailable)
+			postTables(w, r)
 			return
 		}
 		var req struct {
@@ -116,7 +204,7 @@ func main() {
 	mux.Handle("GET /api/tables", handle(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if st == nil {
 			if devAuth {
-				writeJSON(w, http.StatusOK, []*store.GameTable{devRow()})
+				getTables(w, r)
 				return
 			}
 			http.Error(w, "no database configured", http.StatusServiceUnavailable)
@@ -132,8 +220,8 @@ func main() {
 
 	mux.Handle("GET /api/tables/{id}", handle(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if st == nil {
-			if devAuth && r.PathValue("id") == devRow().ID {
-				writeJSON(w, http.StatusOK, devRow())
+			if devAuth {
+				getTable(w, r)
 				return
 			}
 			http.Error(w, "not found", http.StatusNotFound)
@@ -155,9 +243,12 @@ func main() {
 	mux.Handle("GET /api/tables/{id}/ws", handle(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var row *store.GameTable
 		if st == nil {
-			if devAuth && r.PathValue("id") == devRow().ID {
-				row = devRow()
-			} else {
+			if devLookup == nil {
+				http.Error(w, "not found", http.StatusNotFound)
+				return
+			}
+			row = devLookup(r.PathValue("id"))
+			if row == nil {
 				http.Error(w, "not found", http.StatusNotFound)
 				return
 			}
@@ -230,3 +321,12 @@ func cors(h http.Handler) http.Handler {
 }
 
 func intPtr(i int) *int { return &i }
+
+// newDevID: short random id for in-memory dev tables.
+func newDevID() string {
+	b := make([]byte, 6)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
+}

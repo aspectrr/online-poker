@@ -92,6 +92,12 @@ export function createDemoTable(tableId: string): TableStore {
     toAct: -1, deadlineUnixMs: null, legal: null,
     handNo: 0, message: 'Taking your seat…',
     bombPot: false, isDoubleBoard: false, postHand: null, turnTimeoutMs: 20000,
+    cfg: {
+      actionTimeoutS: 20, interHandDelayS: 5, rit: 'never', rabbitHunt: false,
+      sevenDeuce: false, sevenDeuceBounty: 0, bombPotMode: 'off', bombPotTriggers: [],
+    },
+    bombPotArmed: null, boardWins: [],
+    dealt: new Array(MAX).fill(2), dealTotal: 2, dealDone: true,
   })
   const [err, setErr] = createStore({ lastError: null as string | null })
 
@@ -260,9 +266,11 @@ export function createDemoTable(tableId: string): TableStore {
     get state() { return state },
     get lastError() { return err.lastError },
     get status() { return 'open' as const },
-    get toasts() { return [] as { id: number; text: string }[] },
+    get toasts() { return [] as { id: number; text: string; kind?: 'gold' | 'rabbit' }[] },
     send,
     joinSeat: () => {}, // demo seats everyone up front
+    armBombPot: () => {},
+    devDeal: () => {},
     dispose: clearAll,
   }
 }

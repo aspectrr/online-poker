@@ -362,3 +362,55 @@ func TestRITNotClonedWhileBettingPossible(t *testing.T) {
 		t.Fatalf("final board count = %d, want 1", n)
 	}
 }
+
+// LoadedDeck + StartHandWithDeck: forced hole delivery order (dev path).
+func TestLoadedDeckServesOrderThenRemainder(t *testing.T) {
+	prefix := cardsFrom(t, "As", "7d", "2c", "Kh")
+	full := padTo52(t, prefix) // all 52, prefix first
+	d, err := LoadedDeck(full)
+	if err != nil {
+		t.Fatalf("LoadedDeck: %v", err)
+	}
+	got, err := d.Draw(1)
+	if err != nil || got[0] != prefix[0] {
+		t.Fatalf("first draw = %v (%v), want %v", got, err, prefix[0])
+	}
+	for i := 1; i < 4; i++ {
+		got, err := d.Draw(1)
+		if err != nil || got[0] != prefix[i] {
+			t.Fatalf("draw %d = %v (%v), want %v", i, got, err, prefix[i])
+		}
+	}
+	if d.remaining != 48 {
+		t.Fatalf("remaining = %d, want 48", d.remaining)
+	}
+}
+
+func TestLoadedDeckRejectsDuplicates(t *testing.T) {
+	c := NewCard(5, 0)
+	if _, err := LoadedDeck([]Card{c, c}); err == nil {
+		t.Fatal("want error on duplicate card")
+	}
+}
+
+func TestStartHandWithDeckForcesHoles(t *testing.T) {
+	cfg := TableConfig{Game: NLHE, SmallBlind: 50, BigBlind: 100, ButtonSeat: 0}
+	seats := []SeatState{{Seat: 0, Player: "a", Stack: 10000}, {Seat: 1, Player: "b", Stack: 10000}}
+	// dealing is round-major over seat-sorted players: a,b,a,b
+	prefix := cardsFrom(t, "Ah", "Ad", "7s", "2s")
+	// padTo52 returns all 52 with the prefix first — exactly a full order
+	full, err := LoadedDeck(padTo52(t, prefix))
+	if err != nil {
+		t.Fatalf("LoadedDeck: %v", err)
+	}
+	r, err := StartHandWithDeck(cfg, seats, full)
+	if err != nil {
+		t.Fatalf("StartHandWithDeck: %v", err)
+	}
+	if h := r.HolesFor(0); len(h) != 2 || h[0] != prefix[0] || h[1] != prefix[2] {
+		t.Fatalf("seat 0 holes = %v, want [%v %v]", h, prefix[0], prefix[2])
+	}
+	if h := r.HolesFor(1); len(h) != 2 || h[0] != prefix[1] || h[1] != prefix[3] {
+		t.Fatalf("seat 1 holes = %v, want [%v %v]", h, prefix[1], prefix[3])
+	}
+}

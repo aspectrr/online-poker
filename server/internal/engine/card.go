@@ -89,3 +89,53 @@ func (d *Deck) Peek(n int) []Card {
 	copy(out, d.cards[hi:d.remaining])
 	return out
 }
+
+// LoadedDeck: deck whose next draws serve `order` in sequence, then
+// continue with the shuffled remainder of the unused cards. Dev/test
+// helper for forced deals; rejects duplicates and out-of-range cards.
+func LoadedDeck(order []Card) (Deck, error) {
+	if len(order) > 52 {
+		return Deck{}, fmt.Errorf("order of %d cards exceeds deck", len(order))
+	}
+	var d Deck
+	for i := range d.cards {
+		d.cards[i] = Card(i)
+	}
+	used := map[Card]bool{}
+	for _, c := range order {
+		if c > 51 {
+			return Deck{}, fmt.Errorf("card out of range: %d", c)
+		}
+		if used[c] {
+			return Deck{}, fmt.Errorf("duplicate card in order: %v", c)
+		}
+		used[c] = true
+	}
+	// order[0] is drawn first; Draw pops from the top (high index), so
+	// lay order at the top (cards[51] first), shuffled remainder below it.
+	top := 51
+	for i, c := range order {
+		d.cards[top-i] = c
+	}
+	top -= len(order)
+	rest := make([]Card, 0, 52-len(order))
+	for c := Card(0); c <= 51; c++ {
+		if !used[c] {
+			rest = append(rest, c)
+		}
+	}
+	for i := len(rest) - 1; i > 0; i-- {
+		jBig, err := rand.Int(rand.Reader, big.NewInt(int64(i+1)))
+		if err != nil {
+			return Deck{}, fmt.Errorf("shuffle: %w", err)
+		}
+		j := int(jBig.Int64())
+		rest[i], rest[j] = rest[j], rest[i]
+	}
+	for _, c := range rest {
+		d.cards[top] = c
+		top--
+	}
+	d.remaining = 52
+	return d, nil
+}

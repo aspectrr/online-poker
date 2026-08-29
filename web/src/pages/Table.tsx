@@ -1,11 +1,14 @@
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js'
-import { useParams, A } from '@solidjs/router'
+import { useParams, A, useLocation } from '@solidjs/router'
 import { provideTable } from '../stores/table'
 import { createDemoTable } from '../stores/demoTable'
-import type { TableStore } from '../lib/protocol'
+import type { TableStore, UICard } from '../lib/protocol'
 import { Seat } from '../components/table/Seat'
 import { TableCenter } from '../components/table/TableCenter'
 import { ActionBar } from '../components/table/ActionBar'
+import { SettingsDrawer } from '../components/table/SettingsDrawer'
+import { Card } from '../components/cards/Card'
+import { RabbitMark } from '../components/cards/RabbitMark'
 import { blinds } from '../lib/money'
 
 const API_URL = import.meta.env.VITE_API_URL as string | undefined
@@ -33,9 +36,12 @@ function useClock() {
 
 export function TablePage() {
   const params = useParams()
+  const location = useLocation()
+  // hidden dev flag: ?deal=7d2s forces the hero's next hole cards (dev builds)
+  const dealParam = new URLSearchParams(location.search).get('deal') ?? undefined
   // ASPTR-199: VITE_API_URL set -> live ws store; unset -> scripted demo hand.
   const store: TableStore = API_URL
-    ? provideTable(params.id ?? 'dev-table')
+    ? provideTable(params.id ?? 'dev-table', dealParam ?? undefined)
     : createDemoTable(params.id ?? 'demo')
   onCleanup(() => store.dispose())
   const now = useClock()
@@ -56,6 +62,20 @@ export function TablePage() {
     return Math.max(0, dl - now())
   }
 
+  // felt box size for deal-flight offsets (center deck -> seat)
+  let feltBox: HTMLDivElement | undefined
+  const [feltSize, setFeltSize] = createSignal({ w: 1024, h: 640 })
+  onMount(() => {
+    const measure = () => {
+      if (feltBox) setFeltSize({ w: feltBox.clientWidth, h: feltBox.clientHeight })
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    onCleanup(() => window.removeEventListener('resize', measure))
+  })
+
+  const [drawerOpen, setDrawerOpen] = createSignal(false)
+
   // chips-to-winner: fly chips from center to winner seat
   const winners = () => t().seats.filter((s) => s.isWinner)
 
@@ -71,16 +91,53 @@ export function TablePage() {
           </span>
           <span class="text-xs tabular-nums text-fg-muted">{blinds(t().sbCents, t().bbCents)}</span>
         </div>
-        <span class="text-xs tabular-nums text-fg-muted">
-          <Show when={t().handNo > 0}>hand #{t().handNo} · </Show>
-          <Show when={t().bombPot}><span class="font-bold text-accent">BOMB POT · </span></Show>
-          {t().street}
-        </span>
+        <div class="flex items-center gap-3">
+          <span class="text-xs tabular-nums text-fg-muted">
+            <Show when={t().handNo > 0}>hand #{t().handNo} · </Show>
+            <Show when={t().bombPot}><span class="font-bold text-accent">BOMB POT · </span></Show>
+            {t().street}
+          </span>
+          <button
+            type="button"
+            title="Table settings"
+            class="grid size-7 place-items-center rounded-lg text-fg-muted transition-colors hover:bg-surface-raised hover:text-fg"
+            onClick={() => setDrawerOpen(true)}
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" class="size-4" aria-hidden="true">
+              <path fill-rule="evenodd" d="M10 3a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3ZM3.5 8.5a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0Zm9 0a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0ZM10 14a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z" clip-rule="evenodd" />
+            </svg>
+          </button>
+        </div>
       </header>
+
+      {/* bomb pot banners: armed-for-next-hand (persistent) + live hand */}
+      <Show when={t().bombPot || t().bombPotArmed != null}>
+        <div class="pointer-events-none absolute inset-x-0 top-14 z-40 flex justify-center">
+          <Show
+            when={t().bombPot}
+            fallback={
+              <div class="animate-in-pop flex items-center gap-2.5 rounded-xl border border-marigold/70 bg-surface/95 px-4 py-2 shadow-lg">
+                <Show when={typeof t().bombPotArmed === 'object'}>
+                  <Card {...(t().bombPotArmed as UICard)} size="sm" />
+                </Show>
+                <div>
+                  <div class="text-sm font-bold tracking-wide text-marigold">NEXT HAND: DOUBLE BOARD PLO BOMB POT</div>
+                  <div class="text-[11px] text-fg-muted">everyone antes · 4 cards · no preflop betting</div>
+                </div>
+              </div>
+            }
+          >
+            <div class="animate-in-pop rounded-xl border border-danger/70 bg-surface/95 px-4 py-2 text-center shadow-lg">
+              <div class="text-sm font-bold tracking-wide text-danger">DOUBLE BOARD PLO BOMB POT</div>
+              <div class="text-[11px] text-fg-muted">winner per board — ½ pot each</div>
+            </div>
+          </Show>
+        </div>
+      </Show>
 
       {/* table area */}
       <main class="relative flex min-h-0 flex-1 items-center justify-center p-3 sm:p-6">
-        <div class="relative aspect-[16/10] max-h-full w-full max-w-5xl">
+        <div ref={feltBox} class="relative aspect-[16/10] max-h-full w-full max-w-5xl">
           {/* rail */}
           <div class="absolute inset-0 rounded-[999px_/280px] rounded-[50%] border border-[#3a2b1d] bg-gradient-to-b from-[#4a3626] via-[#33241a] to-[#221810] p-[14px] shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7),inset_0_2px_2px_rgba(255,255,255,0.08)]">
             {/* felt */}
@@ -107,6 +164,9 @@ export function TablePage() {
                   msLeft={msLeftFor(seat.seat)}
                   frac={fracFor(seat.seat)}
                   isHero={seat.seat === t().heroSeat}
+                  dealt={t().dealt[seat.seat] ?? 0}
+                  dealDx={(0.5 - fx) * feltSize().w}
+                  dealDy={(0.5 - fy) * feltSize().h}
                   onJoin={canJoin() ? () => store.joinSeat(seat.seat) : undefined}
                   style={`left:${fx * 100}%; top:${fy * 100}%`}
                 />
@@ -126,16 +186,46 @@ export function TablePage() {
         <ActionBar table={t()} send={(a) => store.send(a)} error={store.lastError} />
       </footer>
 
-      {/* toasts (7-2 bounty, …) */}
+      {/* toasts (7-2 bounty gold, rabbit hunt mascot) */}
       <div class="pointer-events-none fixed inset-x-0 top-14 z-50 flex flex-col items-center gap-1.5">
         <For each={store.toasts}>
           {(toast) => (
-            <div class="rounded-full border border-accent/40 bg-surface/95 px-4 py-1.5 text-sm font-semibold text-accent shadow-lg">
-              {toast.text}
-            </div>
+            <Show
+              when={toast.kind === 'gold'}
+              fallback={
+                <Show
+                  when={toast.kind === 'rabbit'}
+                  fallback={
+                    <div class="rounded-full border border-accent/40 bg-surface/95 px-4 py-1.5 text-sm font-semibold text-accent shadow-lg">
+                      {toast.text}
+                    </div>
+                  }
+                >
+                  <div class="flex items-center gap-2 rounded-full border border-line bg-surface/95 px-4 py-1.5 text-sm font-semibold text-fg shadow-lg">
+                    <RabbitMark class="size-5" />
+                    {toast.text}
+                  </div>
+                </Show>
+              }
+            >
+              <div class="animate-toast-gold flex items-center gap-2 rounded-xl border-2 border-marigold bg-marigold/15 px-5 py-2.5 text-base font-bold text-marigold shadow-[0_0_28px_rgba(255,177,16,0.4)]">
+                {toast.text}
+              </div>
+            </Show>
           )}
         </For>
       </div>
+
+      {/* read-only settings drawer */}
+      <SettingsDrawer
+        open={drawerOpen()}
+        cfg={t().cfg}
+        gameType={t().gameType}
+        blinds={blinds(t().sbCents, t().bbCents)}
+        bombPotLive={t().bombPot}
+        onArmBombPot={() => store.armBombPot()}
+        onClose={() => setDrawerOpen(false)}
+      />
     </div>
   )
 }

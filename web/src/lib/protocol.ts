@@ -52,6 +52,13 @@ export type TableSnapshot = {
     big_blind: number
     max_seats: number
     action_timeout_s: number
+    inter_hand_delay_s?: number
+    rit?: string
+    rabbit_hunt?: boolean
+    seven_deuce?: boolean
+    seven_deuce_bounty?: number
+    bomb_pot_mode?: string
+    bomb_pot_triggers?: TriggerWire[]
   }
   seats: SeatWire[]
   your_seat: number
@@ -64,7 +71,12 @@ export type TableSnapshot = {
   deadline_unix_ms?: number
   legal_actions?: LegalActionsWire
   hand_in_progress: boolean
+  bomb_pot_next?: boolean
+  bomb_pot?: boolean
 }
+
+/** Bomb-pot trigger for display (server ranks 2-14, suit 0-3). */
+export type TriggerWire = { rank?: number; suit?: number; color?: string }
 
 /** Engine event (tagged union on `type`). Only the fields we render. */
 export type GameEvent = {
@@ -102,6 +114,8 @@ export type ClientMsg =
   | { type: 'action'; kind: 'fold' | 'check' | 'call' | 'bet'; amount?: number }
   | { type: 'chat'; text: string }
   | { type: 'rabbit'; reveal?: boolean }
+  | { type: 'bomb_pot' }
+  | { type: 'dev_deal'; seat: number; cards: Card[] }
 
 /** Server -> client message (tagged union on `type`). */
 export type ServerMsg =
@@ -123,6 +137,9 @@ export type WireCard = number // 0..51 engine encoding
 
 /** UI card spec, matching cards/Card components. */
 export type UICard = { rank: CardRank; suit: CardSuit }
+
+/** Board card spec — adds rabbit-hunt styling flag to plain cards. */
+export type BoardCard = UICard & { rabbit?: boolean }
 
 /** Decode wire card to UI card. */
 export function toUICard(c: WireCard): UICard {
@@ -158,7 +175,7 @@ export type SeatState = {
 export type BoardState = {
   street: Street
   /** boards[row] — row 0 single board; rows A/B when double (bomb pot / RIT) */
-  boards: UICard[][]
+  boards: BoardCard[][]
   labels?: string[]
 }
 
@@ -237,6 +254,29 @@ export type TableState = {
   isDoubleBoard: boolean
   /** 7-2 reveal/muck + rabbit prompt for the hero, when offered */
   postHand: { bounty: boolean; rabbit: boolean } | null
+  /** read-only active config for the settings drawer */
+  cfg: TableConfigView
+  /** armed for the NEXT hand (bomb_pot_armed); UICard = trigger card when trigger-driven, true = manual arm */
+  bombPotArmed: UICard | true | null
+  /** board rows that had a pot awarded to them (per-board win highlight) */
+  boardWins: number[]
+  /** opening deal sequence: cards landed per seat / cards per player */
+  dealt: number[]
+  dealTotal: number
+  /** true after the last deal-sequence card landed (final hero flip) */
+  dealDone: boolean
+}
+
+/** Read-only config view for the settings drawer. */
+export type TableConfigView = {
+  actionTimeoutS: number
+  interHandDelayS: number
+  rit: string
+  rabbitHunt: boolean
+  sevenDeuce: boolean
+  sevenDeuceBounty: number
+  bombPotMode: string
+  bombPotTriggers: TriggerWire[]
 }
 
 export type PlayerAction =
@@ -256,11 +296,15 @@ export type TableStore = {
   send(action: PlayerAction): void
   /** Take a seat (ws join). No-op when already seated. */
   joinSeat(seat: number): void
+  /** Arm a bomb pot for the next hand (manual mode). */
+  armBombPot(): void
+  /** Force hero hole cards next hand (dev builds only). Wire card numbers. */
+  devDeal(cards: WireCard[]): void
   /** Current ws connection state. */
   readonly status: ConnectionStatus
   /** Last error (rejected action etc.) — set, not thrown. */
   readonly lastError: string | null
   /** Transient toasts (7-2 bounty, bomb pot, …). */
-  readonly toasts: { id: number; text: string }[]
+  readonly toasts: { id: number; text: string; kind?: 'gold' | 'rabbit' }[]
   dispose(): void
 }

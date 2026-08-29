@@ -42,7 +42,7 @@ export const DEFAULT_TABLE_CONFIG: TableConfig = {
   smallBlindCents: 10,
   bigBlindCents: 20,
   startingStackBb: 100,
-  actionTimeoutSec: 30,
+  actionTimeoutSec: 15,
   interHandDelaySec: 5,
   runItTwice: 'off',
   rabbitHunt: false,
