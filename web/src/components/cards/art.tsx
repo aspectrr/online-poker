@@ -74,9 +74,10 @@ export function CornerIndex(props: { rank: Rank; suit: Suit; ink: string }): JSX
     <g text-anchor="middle" fill={props.ink}>
       <text
         y="26"
-        font-size={ten ? '19' : '30'}
+        x={ten ? '2' : '0'}
+        font-size="30"
         font-weight="800"
-        letter-spacing={ten ? '-1.5' : '-1'}
+        letter-spacing={ten ? '-2' : '-1'}
         stroke={props.ink}
         stroke-width="1"
         paint-order="stroke"
