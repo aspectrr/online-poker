@@ -10,19 +10,20 @@ import type { Rank, Suit } from './Card'
  * cream faces, bold classic silhouettes.
  */
 
-// ---- suit colors: pastel-but-legible; corners use ink-darkened AA variants ----
+// ---- suit colors: pastel green/blue/red/yellow per PM direction; corners
+// use ink-darkened legible variants (AA-ish on cream #fdf9f0)
 export const SUIT_COLOR: Record<Suit, string> = {
-  s: '#2b2b2b',
-  h: '#e05252',
-  d: '#5a8fd6',
-  c: '#4f9e63',
+  s: '#85aede', // pastel blue
+  h: '#ef8b8b', // pastel red
+  d: '#e7c46a', // pastel yellow
+  c: '#93c993', // pastel green
 }
-// AA-on-cream (#fdf9f0) versions for corner indices. Contrast: 13.9 / 5.4 / 5.9 / 5.6 :1
+// Darker versions for corner indices (small text needs the contrast).
 export const SUIT_INK: Record<Suit, string> = {
-  s: '#2b2b2b',
-  h: '#b03535',
-  d: '#33629e',
-  c: '#35764a',
+  s: '#4d7cb8',
+  h: '#c04f4f',
+  d: '#97741f',
+  c: '#4e8752',
 }
 
 export const GOLD = '#d9a441'
@@ -65,25 +66,25 @@ const RANK_LABEL: Record<Rank, string> = {
  * Corner index: bold rank + small suit glyph beneath, drawn centered on x=0
  * from y=0 (caller translates to the corner; BR corner rotates 180°).
  * Stroke + paint-order fattens small-size text (hairline system fonts).
- * Block spans y 10..40, x 2..20 — clears pip columns (ink from x 21.7).
+ * Sized/inset so ranks keep breathing room from the card edge.
  */
 export function CornerIndex(props: { rank: Rank; suit: Suit; ink: string }): JSX.Element {
   const ten = props.rank === '10'
   return (
     <g text-anchor="middle" fill={props.ink}>
       <text
-        y="30"
-        font-size={ten ? '24' : '40'}
+        y="26"
+        font-size={ten ? '19' : '30'}
         font-weight="800"
-        letter-spacing={ten ? '-2' : '-1'}
+        letter-spacing={ten ? '-1.5' : '-1'}
         stroke={props.ink}
-        stroke-width="1.1"
+        stroke-width="1"
         paint-order="stroke"
         style="font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif"
       >
         {RANK_LABEL[props.rank]}
       </text>
-      <g transform="translate(0 42) scale(0.2) translate(-50 -50)">
+      <g transform="translate(0 38) scale(0.17) translate(-50 -50)">
         <SuitPath suit={props.suit} />
       </g>
     </g>
@@ -92,14 +93,14 @@ export function CornerIndex(props: { rank: Rank; suit: Suit; ink: string }): JSX
 
 /**
  * Center motif — THE one motif on every rank, modern-minimal:
- * a thin diagonal rule passing behind a large suit glyph. No pips,
+ * a thin diagonal rule passing behind a modest suit glyph. No pips,
  * no court portraits; the giant corner rank carries the value.
  */
 export function CenterMotif(props: { suit: Suit; color: string }): JSX.Element {
   return (
     <g>
       <line x1="24" y1="116" x2="76" y2="24" stroke={props.color} stroke-width="3" stroke-linecap="round" opacity="0.28" />
-      <g transform="translate(50 70) scale(0.46) translate(-50 -50)">
+      <g transform="translate(50 70) scale(0.32) translate(-50 -50)">
         <g fill={props.color}>
           <SuitPath suit={props.suit} />
         </g>

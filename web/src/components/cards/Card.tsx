@@ -44,11 +44,11 @@ export function CardFace(props: CardFaceProps) {
   return (
     <div class={cn('card-face absolute inset-0 overflow-hidden rounded-[12px] bg-[#fdf9f0]', local.class)}>
       <svg class="absolute inset-0 h-full w-full" viewBox="0 0 100 140" aria-hidden="true">
-        {/* corner indices: top-left + bottom-right (rotated) */}
-        <g transform="translate(11 13)">
+        {/* corner indices: top-left + bottom-right (rotated) — inset for breathing room */}
+        <g transform="translate(18 20)">
           <CornerIndex rank={local.rank} suit={local.suit} ink={ink()} />
         </g>
-        <g transform="translate(89 127) rotate(180)">
+        <g transform="translate(82 120) rotate(180)">
           <CornerIndex rank={local.rank} suit={local.suit} ink={ink()} />
         </g>
         {/* center art: one uniform motif on every rank */}
