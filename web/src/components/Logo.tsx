@@ -27,5 +27,5 @@ export function Logo(props: { class?: string }) {
       {/* the river */}
       <path d="M3.5 21.3c1.4-1.2 2.9-1.2 4.3 0s2.8 1.2 4.2 0 2.8-1.2 4.2 0 2.9 1.2 4.3 0" />
     </svg>
-  )
+  );
 }

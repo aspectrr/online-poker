@@ -1,19 +1,19 @@
-import { splitProps } from 'solid-js'
-import * as SliderPrimitive from '@kobalte/core/slider'
-import { cn } from '../../lib/cn'
+import { splitProps } from "solid-js";
+import * as SliderPrimitive from "@kobalte/core/slider";
+import { cn } from "../../lib/cn";
 
-type SliderProps = Omit<SliderPrimitive.SliderRootProps, 'value'> & {
-  class?: string
-  value?: number[]
-  onChange?: (value: number[]) => void
-}
+type SliderProps = Omit<SliderPrimitive.SliderRootProps, "value"> & {
+  class?: string;
+  value?: number[];
+  onChange?: (value: number[]) => void;
+};
 
 /** Single-thumb slider with visible value bubble supplied by call site. */
 export function Slider(props: SliderProps) {
-  const [local, others] = splitProps(props, ['class', 'value', 'onChange'])
+  const [local, others] = splitProps(props, ["class", "value", "onChange"]);
   return (
     <SliderPrimitive.Root
-      class={cn('relative flex w-full touch-none select-none items-center py-2', local.class)}
+      class={cn("relative flex w-full touch-none select-none items-center py-2", local.class)}
       value={local.value}
       onChange={local.onChange}
       {...others}
@@ -25,5 +25,5 @@ export function Slider(props: SliderProps) {
         <SliderPrimitive.Input />
       </SliderPrimitive.Thumb>
     </SliderPrimitive.Root>
-  )
+  );
 }

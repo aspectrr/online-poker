@@ -3,4 +3,4 @@
  * (single source of truth — wire types + this UI facade). Re-exported here
  * so component imports stay unchanged.
  */
-export * from './protocol'
+export * from "./protocol";

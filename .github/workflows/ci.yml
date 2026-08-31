@@ -11,8 +11,8 @@ jobs:
   server:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: server/go.mod
           cache-dependency-path: server/go.sum
@@ -43,6 +43,9 @@ jobs:
       - name: lint
         working-directory: web
         run: bun run lint
+      - name: format check
+        working-directory: web
+        run: bun run fmt:check
       - name: typecheck
         working-directory: web
         run: bun --bun tsc -b

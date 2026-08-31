@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
+  "plugins": ["typescript", "unicorn", "jsx-a11y"],
+  "rules": {
+    "unicorn/prefer-add-event-listener": "off",
+    "jsx-a11y/prefer-tag-over-role": "off"
+  }
+}

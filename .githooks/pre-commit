@@ -28,7 +28,10 @@ if [ ! -d node_modules ]; then
   bun install --frozen-lockfile || fail=1
 fi
 
-step "web: biome lint"
+step "web: format check"
+bun run fmt:check || fail=1
+
+step "web: oxlint"
 bun run lint || fail=1
 
 step "web: typecheck"

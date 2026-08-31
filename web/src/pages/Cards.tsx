@@ -1,53 +1,53 @@
-import { For, Show, createSignal } from 'solid-js'
-import { A } from '@solidjs/router'
-import { Button } from '../components/ui/Button'
-import { Card, RANKS, SUITS, type Rank } from '../components/cards/Card'
-import { CardRow, dealDelay, type CardSpec } from '../components/cards/CardRow'
-import { RabbitMark } from '../components/cards/RabbitMark'
-import { Logo } from '../components/Logo'
+import { For, Show, createSignal } from "solid-js";
+import { A } from "@solidjs/router";
+import { Button } from "../components/ui/Button";
+import { Card, RANKS, SUITS, type Rank } from "../components/cards/Card";
+import { CardRow, dealDelay, type CardSpec } from "../components/cards/CardRow";
+import { RabbitMark } from "../components/cards/RabbitMark";
+import { Logo } from "../components/Logo";
 
-const PIP_RANKS: Rank[] = ['2', '3', '4', '5', '6', '7', '8', '9', '10']
+const PIP_RANKS: Rank[] = ["2", "3", "4", "5", "6", "7", "8", "9", "10"];
 /** deterministic-ish demo hands */
 const HERO_HOLE: CardSpec[] = [
-  { rank: 'A', suit: 's' },
-  { rank: 'K', suit: 's' },
-]
+  { rank: "A", suit: "s" },
+  { rank: "K", suit: "s" },
+];
 const FULL_BOARD: CardSpec[] = [
-  { rank: 'Q', suit: 's' },
-  { rank: 'J', suit: 's' },
-  { rank: '10', suit: 's' },
-  { rank: '7', suit: 'h' },
-  { rank: '2', suit: 'd' },
-]
+  { rank: "Q", suit: "s" },
+  { rank: "J", suit: "s" },
+  { rank: "10", suit: "s" },
+  { rank: "7", suit: "h" },
+  { rank: "2", suit: "d" },
+];
 
 export function CardsPage() {
   // playground state
-  const [boardCount, setBoardCount] = createSignal(0)
-  const [revealed, setRevealed] = createSignal(false)
-  const [winners, setWinners] = createSignal(false)
-  const [chips, setChips] = createSignal<number[]>([])
-  const [flying, setFlying] = createSignal(false)
+  const [boardCount, setBoardCount] = createSignal(0);
+  const [revealed, setRevealed] = createSignal(false);
+  const [winners, setWinners] = createSignal(false);
+  const [chips, setChips] = createSignal<number[]>([]);
+  const [flying, setFlying] = createSignal(false);
 
-  const board = () => FULL_BOARD.slice(0, boardCount()).map((c) => ({ ...c, win: winners() }))
+  const board = () => FULL_BOARD.slice(0, boardCount()).map((c) => ({ ...c, win: winners() }));
 
   const dealBoard = () => {
-    setWinners(false)
-    setBoardCount(0)
-    requestAnimationFrame(() => setBoardCount(5))
-  }
+    setWinners(false);
+    setBoardCount(0);
+    requestAnimationFrame(() => setBoardCount(5));
+  };
 
-  const flipHole = () => setRevealed((v) => !v)
-  const pulseWin = () => setWinners((v) => !v)
+  const flipHole = () => setRevealed((v) => !v);
+  const pulseWin = () => setWinners((v) => !v);
 
   const flyChips = () => {
-    if (flying()) return
-    setFlying(true)
-    setChips([0, 1, 2, 3, 4, 5])
+    if (flying()) return;
+    setFlying(true);
+    setChips([0, 1, 2, 3, 4, 5]);
     setTimeout(() => {
-      setChips([])
-      setFlying(false)
-    }, 1000)
-  }
+      setChips([]);
+      setFlying(false);
+    }, 1000);
+  };
 
   return (
     <div class="min-h-dvh bg-bg">
@@ -69,7 +69,9 @@ export function CardsPage() {
         {/* ---- Animation playground ---- */}
         <section>
           <h2 class="font-display text-xl font-bold tracking-tight text-fg">Playground</h2>
-          <p class="mt-1 text-sm text-fg-muted">Deal, flip, win pulse, chip fly — the pieces the table view will compose.</p>
+          <p class="mt-1 text-sm text-fg-muted">
+            Deal, flip, win pulse, chip fly — the pieces the table view will compose.
+          </p>
 
           <div class="relative mt-6 overflow-hidden rounded-card border border-line bg-accent-tint p-8 sm:p-12">
             {/* rail ellipse hint */}
@@ -78,13 +80,17 @@ export function CardsPage() {
             <div class="flex flex-col items-center gap-8">
               {/* hero hole cards */}
               <div class="flex flex-col items-center gap-2">
-                <span class="text-xs font-semibold uppercase tracking-widest text-fg-muted">Hero</span>
+                <span class="text-xs font-semibold uppercase tracking-widest text-fg-muted">
+                  Hero
+                </span>
                 <CardRow cards={HERO_HOLE} revealed={revealed()} size="md" />
               </div>
 
               {/* board */}
               <div class="relative flex min-h-[124px] flex-col items-center gap-2">
-                <span class="text-xs font-semibold uppercase tracking-widest text-fg-muted">Board</span>
+                <span class="text-xs font-semibold uppercase tracking-widest text-fg-muted">
+                  Board
+                </span>
                 <div class="flex items-center gap-2.5">
                   <For each={board()}>
                     {(card, i) => (
@@ -94,7 +100,7 @@ export function CardsPage() {
                     )}
                   </For>
                   {/* empty board slots */}
-                  <For each={new Array(5 - board().length).fill(0)}>
+                  <For each={Array.from({ length: 5 - board().length })}>
                     {() => (
                       <div class="h-[124px] w-[88px] rounded-lg border border-dashed border-black/15" />
                     )}
@@ -111,9 +117,9 @@ export function CardsPage() {
                       <div
                         class="chip chip-fly absolute left-1/2 top-0"
                         style={{
-                          '--chip-x': `${(i() % 3) * 30 - 20}px`,
-                          '--chip-y': '-110px',
-                          'animation-delay': `${i() * 70}ms`,
+                          "--chip-x": `${(i() % 3) * 30 - 20}px`,
+                          "--chip-y": "-110px",
+                          "animation-delay": `${i() * 70}ms`,
                         }}
                       />
                     )}
@@ -126,10 +132,10 @@ export function CardsPage() {
           <div class="mt-5 flex flex-wrap gap-3">
             <Button onClick={dealBoard}>Deal board</Button>
             <Button variant="outline" onClick={flipHole}>
-              {revealed() ? 'Muck hole cards' : 'Flip hole cards'}
+              {revealed() ? "Muck hole cards" : "Flip hole cards"}
             </Button>
             <Button variant="outline" onClick={pulseWin}>
-              {winners() ? 'Clear win pulse' : 'Win pulse'}
+              {winners() ? "Clear win pulse" : "Win pulse"}
             </Button>
             <Button variant="outline" onClick={flyChips}>
               Ship pot
@@ -139,15 +145,16 @@ export function CardsPage() {
 
         {/* ---- corner legibility at sm (the acceptance bar) ---- */}
         <section>
-          <h2 class="font-display text-xl font-bold tracking-tight text-fg">Corner legibility · sm &amp; 40px</h2>
+          <h2 class="font-display text-xl font-bold tracking-tight text-fg">
+            Corner legibility · sm &amp; 40px
+          </h2>
           <p class="mt-1 text-sm text-fg-muted">
-            Rank readable at a glance — sm (56×80) and a 40px-height card. If the corner fails here, it fails.
+            Rank readable at a glance — sm (56×80) and a 40px-height card. If the corner fails here,
+            it fails.
           </p>
           <div class="mt-5 space-y-5 rounded-2xl border border-line bg-surface p-6">
             <div class="flex flex-wrap items-end gap-1.5">
-              <For each={RANKS}>
-                {(rank) => <Card rank={rank} suit="s" size="sm" />}
-              </For>
+              <For each={RANKS}>{(rank) => <Card rank={rank} suit="s" size="sm" />}</For>
             </div>
             <div class="flex flex-wrap items-end gap-1">
               <For each={RANKS}>
@@ -164,7 +171,9 @@ export function CardsPage() {
         {/* ---- pip layout showcase ---- */}
         <section>
           <h2 class="font-display text-xl font-bold tracking-tight text-fg">Pip layouts</h2>
-          <p class="mt-1 text-sm text-fg-muted">Every rank shares one center motif — diagonal rule + suit glyph.</p>
+          <p class="mt-1 text-sm text-fg-muted">
+            Every rank shares one center motif — diagonal rule + suit glyph.
+          </p>
           <div class="mt-5 grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-3">
             <For each={PIP_RANKS}>
               {(rank, i) => (
@@ -185,7 +194,7 @@ export function CardsPage() {
           <div class="mt-5 flex flex-wrap gap-3">
             <For each={SUITS}>
               {(suit) => (
-                <For each={['K', 'Q', 'J', 'A'] as Rank[]}>
+                <For each={["K", "Q", "J", "A"] as Rank[]}>
                   {(rank) => <Card rank={rank} suit={suit} />}
                 </For>
               )}
@@ -198,27 +207,27 @@ export function CardsPage() {
           <div class="flex items-end justify-between gap-4">
             <div>
               <h2 class="font-display text-xl font-bold tracking-tight text-fg">Full deck</h2>
-              <p class="mt-1 text-sm text-fg-muted">All 52 — cream faces, pastel suits, crimson lattice backs.</p>
+              <p class="mt-1 text-sm text-fg-muted">
+                All 52 — cream faces, pastel suits, crimson lattice backs.
+              </p>
             </div>
             <span class="text-xs text-fg-muted">52 cards, 4 suits × 13 ranks</span>
           </div>
           <div class="mt-5 grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-3">
             <For each={RANKS}>
-              {(rank) => (
-                <For each={SUITS}>
-                  {(suit) => (
-                    <Card rank={rank} suit={suit} />
-                  )}
-                </For>
-              )}
+              {(rank) => <For each={SUITS}>{(suit) => <Card rank={rank} suit={suit} />}</For>}
             </For>
           </div>
         </section>
 
         {/* ---- sizes, back, rabbit ---- */}
         <section>
-          <h2 class="font-display text-xl font-bold tracking-tight text-fg">Sizes, back &amp; rabbit</h2>
-          <p class="mt-1 text-sm text-fg-muted">sm / md / lg, crimson lattice back, and the RabbitMark mascot (rabbit-hunt toasts).</p>
+          <h2 class="font-display text-xl font-bold tracking-tight text-fg">
+            Sizes, back &amp; rabbit
+          </h2>
+          <p class="mt-1 text-sm text-fg-muted">
+            sm / md / lg, crimson lattice back, and the RabbitMark mascot (rabbit-hunt toasts).
+          </p>
           <div class="mt-5 flex flex-wrap items-end gap-8 rounded-card border border-line bg-surface p-8">
             <Card rank="A" suit="s" size="sm" />
             <Card rank="K" suit="h" size="md" />
@@ -236,5 +245,5 @@ export function CardsPage() {
         </section>
       </main>
     </div>
-  )
+  );
 }
