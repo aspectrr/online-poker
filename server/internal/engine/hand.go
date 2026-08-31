@@ -92,6 +92,12 @@ func StartHand(cfg TableConfig, seats []SeatState) (*HandRunner, error) {
 	return startHand(cfg, seats, d)
 }
 
+// StartHandWithDeck: StartHand with an injectable deck (tests / dev-only
+// forced deals via LoadedDeck). Not used in normal play.
+func StartHandWithDeck(cfg TableConfig, seats []SeatState, d Deck) (*HandRunner, error) {
+	return startHand(cfg, seats, d)
+}
+
 // startHand: core constructor with injectable deck (deterministic tests).
 func startHand(cfg TableConfig, seats []SeatState, d Deck) (*HandRunner, error) {
 	if err := cfg.Validate(); err != nil {

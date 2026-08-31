@@ -57,7 +57,7 @@ export function CreateTableDialog(props: { onCreated: () => void }) {
         </svg>
         Create table
       </DialogTrigger>
-      <DialogContent title="Create a table" description="Defaults to 0.10/0.20 NLHE, 100bb, 30s action clock.">
+      <DialogContent title="Create a table" description="Defaults to 0.10/0.20 NLHE, 100bb, 15s action clock.">
         <form id="create-table" class="flex flex-col gap-6" onSubmit={submit}>
           <Field label="Table name">
             <Input
@@ -116,7 +116,7 @@ export function CreateTableDialog(props: { onCreated: () => void }) {
                 <span class="text-sm font-semibold tabular-nums text-accent">{config().actionTimeoutSec}s</span>
               </div>
               <Slider
-                minValue={10} maxValue={60} step={5}
+                minValue={5} maxValue={300} step={5}
                 value={[config().actionTimeoutSec]}
                 onChange={(v) => set({ actionTimeoutSec: v[0] })}
               />
@@ -159,7 +159,7 @@ export function CreateTableDialog(props: { onCreated: () => void }) {
               <Select
                 options={[
                   { value: 'off', label: 'Off' },
-                  { value: 'every_hand', label: 'Every hand' },
+                  { value: 'every_hand', label: 'Manual (arm in table settings)' },
                   { value: 'trigger', label: 'Card trigger' },
                 ]}
                 value={config().bombPotMode}

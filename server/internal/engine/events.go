@@ -19,6 +19,11 @@ const (
 	EvSevenDeuceBounty EventType = "seven_deuce_bounty"
 	EvRabbitHunt       EventType = "rabbit_hunt"
 	EvHandEnded        EventType = "hand_ended"
+
+	// EvBombPotArmed is emitted by the table layer (not the engine) when the
+	// next hand will be a bomb pot — via card trigger match or manual arm.
+	// Cards carries the matching trigger card when trigger-driven.
+	EvBombPotArmed EventType = "bomb_pot_armed"
 )
 
 type Winner struct {

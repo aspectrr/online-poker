@@ -2,7 +2,7 @@ import { For, Show, createResource } from 'solid-js'
 import { A, useNavigate } from '@solidjs/router'
 import { Button } from '../components/ui/Button'
 import { CreateTableDialog } from '../components/CreateTableDialog'
-import { MOCK_MODE, joinTable, listTables } from '../lib/api'
+import { MOCK_MODE, listTables } from '../lib/api'
 import { blinds, money } from '../lib/money'
 import type { TableSummary } from '../lib/types'
 import { cn } from '../lib/cn'
@@ -15,8 +15,8 @@ export function LobbyPage() {
   const navigate = useNavigate()
 
   const onJoin = async (t: TableSummary) => {
-    await joinTable(t.id)
-    navigate(`/table/${t.id}`)
+
+    navigate(`/table/${t.id}${location.search}`)
   }
 
   return (

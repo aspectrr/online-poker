@@ -100,6 +100,9 @@ func (c *TableConfig) Validate() error {
 // ApplyDefaults fills zero fields with sensible poker values so callers
 // can send partial config. Called before Validate.
 func (c *TableConfig) ApplyDefaults() {
+	if c.ActionTimeoutS == 0 {
+		c.ActionTimeoutS = 15
+	}
 	if c.RIT == "" {
 		c.RIT = "never"
 	}

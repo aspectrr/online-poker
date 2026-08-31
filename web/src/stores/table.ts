@@ -2,9 +2,10 @@ import { createSignal, onCleanup } from 'solid-js'
 import { TableSocket, tableWsUrl } from '../lib/ws'
 import { authIdentity } from '../lib/identity'
 import {
-  actionLabel, cardText, uiCards, uiLegal, uiSeat,
+  actionLabel, cardText, toUICard, uiCards, uiLegal, uiSeat,
   type ConnectionStatus, type GameEvent, type LegalActionsWire, type PlayerAction,
   type SeatWire, type ServerMsg, type TableSnapshot, type TableState, type TableStore,
+  type WireCard,
 } from '../lib/protocol'
 import { money } from '../lib/money'
 
@@ -12,6 +13,11 @@ const API_URL = import.meta.env.VITE_API_URL as string | undefined
 
 const emptySeat = (seat: number): TableState['seats'][number] => ({
   seat, player: '', stackCents: 0, sittingOut: false, inHand: false, folded: false, betCents: 0, hasCards: false,
+})
+
+const defaultCfg = (): TableState['cfg'] => ({
+  actionTimeoutS: 15, interHandDelayS: 5, rit: 'never', rabbitHunt: false,
+  sevenDeuce: false, sevenDeuceBounty: 0, bombPotMode: 'off', bombPotTriggers: [],
 })
 
 function initialState(tableId: string): TableState {
@@ -23,6 +29,7 @@ function initialState(tableId: string): TableState {
     board: { street: 'preflop', boards: [[]] }, holeCards: [],
     toAct: -1, deadlineUnixMs: null, turnTimeoutMs: 20000, legal: null,
     handNo: 0, message: 'connecting…', bombPot: false, isDoubleBoard: false, postHand: null,
+    cfg: defaultCfg(), bombPotArmed: null, boardWins: [], dealt: [], dealTotal: 2, dealDone: true,
   }
 }
 
@@ -35,19 +42,63 @@ function createTableStore(tableId: string): TableStore {
   const [state, setState] = createSignal<TableState>(initialState(tableId))
   const [status, setStatus] = createSignal<ConnectionStatus>('connecting')
   const [lastError, setLastError] = createSignal<string | null>(null)
-  const [toasts, setToasts] = createSignal<{ id: number; text: string }[]>([])
+  const [toasts, setToasts] = createSignal<{ id: number; text: string; kind?: 'gold' | 'rabbit' }[]>([])
 
   let sock: TableSocket | null = null
   let name: string | null = null
   let joinSent = false // latch: don't re-join every snapshot
   let toastId = 0
+  let dealTimers: ReturnType<typeof setTimeout>[] = []
+  let pendingDevDeal: WireCard[] | null = null // ?deal= param → sent on next hand start
 
   const patch = (p: Partial<TableState>) => setState((s) => ({ ...s, ...p }))
 
-  const toast = (text: string) => {
+  const toast = (text: string, kind?: 'gold' | 'rabbit') => {
     const id = ++toastId
-    setToasts((ts) => [...ts, { id, text }])
-    setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), 4500)
+    setToasts((ts) => [...ts, { id, text, kind }])
+    setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), kind === 'gold' ? 6000 : 4500)
+  }
+
+  const clearDealTimers = () => {
+    dealTimers.forEach(clearTimeout)
+    dealTimers = []
+  }
+
+  /**
+   * Opening deal choreography (client-side theater): one card per seated
+   * player clockwise from left of the button, round by round. per-card
+   * 170ms, 260ms pause between rounds — ~2.5s at a full 6-max table.
+   */
+  const scheduleDeal = (s: TableState, bombPot: boolean) => {
+    clearDealTimers()
+    const rounds = bombPot ? 4 : 2
+    const n = s.seats.length
+    // inHand flags can be stale here (seats frame trails the event batch);
+    // the engine deals in every occupied, non-sitting-out, stacked seat.
+    const inHand: number[] = []
+    for (let i = 1; i <= n; i++) {
+      const seat = (s.buttonSeat + i) % n
+      const x = s.seats[seat]
+      if (x && x.player && x.stackCents > 0 && !x.sittingOut) inHand.push(seat)
+    }
+    if (inHand.length === 0) return
+    const perCard = 170
+    const roundGap = 260
+    let t = 0
+    for (let r = 0; r < rounds; r++) {
+      for (const seat of inHand) {
+        dealTimers.push(setTimeout(() => {
+          setState((cur) => {
+            const d = [...cur.dealt]
+            d[seat] = (d[seat] ?? 0) + 1
+            return { ...cur, dealt: d }
+          })
+        }, t))
+        t += perCard
+      }
+      t += roundGap
+    }
+    dealTimers.push(setTimeout(() => patch({ dealDone: true }), t))
   }
 
   const reduce = (m: ServerMsg) => {
@@ -93,6 +144,18 @@ function createTableStore(tableId: string): TableStore {
     setState((s) => {
       const inHand = snap.hand_in_progress
       const legal = snap.legal_actions && snap.legal_actions.seat === snap.your_seat ? uiLegal(snap.legal_actions) : null
+      const c = snap.config
+      const cfg: TableState['cfg'] = {
+        actionTimeoutS: c.action_timeout_s,
+        interHandDelayS: c.inter_hand_delay_s ?? 5,
+        rit: c.rit ?? 'never',
+        rabbitHunt: c.rabbit_hunt ?? false,
+        sevenDeuce: c.seven_deuce ?? false,
+        sevenDeuceBounty: c.seven_deuce_bounty ?? 0,
+        bombPotMode: c.bomb_pot_mode ?? 'off',
+        bombPotTriggers: c.bomb_pot_triggers ?? [],
+      }
+      const rounds = snap.bomb_pot ? 4 : 2
       return {
         ...s,
         name: snap.name,
@@ -113,8 +176,15 @@ function createTableStore(tableId: string): TableStore {
         turnTimeoutMs: Math.max(1000, (snap.config.action_timeout_s || 20) * 1000),
         legal,
         message: inHand ? s.message : 'Waiting for players…',
+        cfg,
         // reconnect into a live hand keeps the bomb-pot banner; a fresh seat loses it
-        bombPot: inHand ? s.bombPot : false,
+        bombPot: snap.bomb_pot ?? false,
+        bombPotArmed: snap.bomb_pot_next ? (s.bombPotArmed ?? true) : null,
+        boardWins: inHand ? s.boardWins : [],
+        // reconnect mid-hand: skip the deal animation, everything's landed
+        dealt: inHand && s.dealDone === false ? s.dealt : new Array(s.seats.length).fill(rounds),
+        dealTotal: rounds,
+        dealDone: true,
         postHand: null,
         seats: snap.seats.map((w) => {
           const prev = s.seats.find((x) => x.seat === w.seat)
@@ -139,23 +209,38 @@ function createTableStore(tableId: string): TableStore {
     const seat = e.seat ?? 0
     const boardIdx = e.board_index ?? 0
     switch (e.type) {
-      case 'hand_started':
+      case 'hand_started': {
+        const bombPot = e.bomb_pot ?? false
         setState((s) => ({
           ...s,
           handNo: e.hand_id || s.handNo + 1,
-          bombPot: e.bomb_pot ?? false,
-          isDoubleBoard: e.bomb_pot ?? false,
+          bombPot,
+          isDoubleBoard: bombPot,
           street: 'preflop', potCents: 0,
           board: { street: 'preflop', boards: [[]] },
           holeCards: [], toAct: -1, deadlineUnixMs: null, legal: null, postHand: null,
-          message: e.bomb_pot ? 'Bomb pot — 4 cards, antes in' : `Hand #${e.hand_id || s.handNo + 1}`,
+          bombPotArmed: null,
+          boardWins: [],
+          dealTotal: bombPot ? 4 : 2,
+          dealt: new Array(s.seats.length).fill(0),
+          dealDone: false,
+          message: bombPot ? 'Bomb pot — 4 cards, antes in' : `Hand #${e.hand_id || s.handNo + 1}`,
           seats: s.seats.map((x) => ({ ...x, folded: false, lastAction: undefined, isWinner: false, revealedCards: undefined })),
         }))
+        scheduleDeal(state(), bombPot)
+        // hidden dev flag: force hero hole cards (server honors only in dev builds)
+        if (pendingDevDeal && state().heroSeat >= 0) {
+          sock?.send({ type: 'dev_deal', seat: state().heroSeat, cards: pendingDevDeal })
+        }
         break
+      }
       case 'holes_dealt':
         if (seat === state().heroSeat) {
           setState((s) => ({ ...s, holeCards: [uiCards(e.cards)] }))
         }
+        break
+      case 'bomb_pot_armed':
+        patch({ bombPotArmed: e.cards?.length ? toUICard(e.cards[0]) : true })
         break
       case 'blinds_posted':
       case 'antes_posted':
@@ -230,6 +315,23 @@ function createTableStore(tableId: string): TableStore {
           }),
         }))
         break
+      case 'pot_awarded': {
+        setState((s) => {
+          const w = e.winners ?? []
+          const first = w[0]
+          const boardIdx = first?.board_index ?? 0
+          const boardLabel = s.isDoubleBoard ? ` ${s.bombPot ? 'board ' + String.fromCharCode(65 + boardIdx) : 'run ' + (boardIdx + 1)}` : ''
+          return {
+            ...s,
+            message: first
+              ? `${s.seats[first.seat]?.player ?? 'seat ' + first.seat} wins ${money(w.reduce((a, x) => a + x.amount, 0))}${first.hand_name ? ` — ${first.hand_name}` : ''}${boardLabel}`
+              : s.message,
+            seats: s.seats.map((x) => (w.some((y) => y.seat === x.seat) ? { ...x, isWinner: true } : x)),
+            boardWins: s.isDoubleBoard && !s.boardWins.includes(boardIdx) ? [...s.boardWins, boardIdx] : s.boardWins,
+          }
+        })
+        break
+      }
       case 'pot_awarded':
         setState((s) => {
           const w = e.winners ?? []
@@ -245,15 +347,18 @@ function createTableStore(tableId: string): TableStore {
         })
         break
       case 'seven_deuce_bounty':
-        toast(`7-2 bounty! ${e.player ?? 'someone'} collects ${money(e.amount ?? 0)} from each player`)
+        toast(`${e.player ?? 'someone'} wins ${money(e.amount ?? 0)} bounty w/ 7-2!`, 'gold')
         break
-      case 'rabbit_hunt':
+      case 'rabbit_hunt': {
+        const rabbitCards = uiCards(e.rabbit).map((c) => ({ ...c, rabbit: true as const }))
         setState((s) => {
           const boards = s.board.boards.length ? [...s.board.boards] : [[]]
-          boards[0] = [...boards[0], ...uiCards(e.rabbit)]
+          boards[0] = [...boards[0], ...rabbitCards]
           return { ...s, message: `Rabbit hunt: ${cardText(e.rabbit)}`, board: { ...s.board, boards } }
         })
+        toast(`Rabbit hunt: ${cardText(e.rabbit)}`, 'rabbit')
         break
+      }
       case 'hand_ended':
         setState((s) => ({
           ...s,
@@ -284,7 +389,6 @@ function createTableStore(tableId: string): TableStore {
     sock = new TableSocket(tableWsUrl(API_URL, tableId), id.token, reduce, setStatus)
     sock.connect()
   }
-
   const send = (a: PlayerAction) => {
     if (a.kind === 'raise') sock?.send({ type: 'action', kind: 'bet', amount: a.toCents })
     else if (a.kind === 'reveal') sock?.send({ type: 'rabbit', reveal: true })
@@ -299,7 +403,19 @@ function createTableStore(tableId: string): TableStore {
     sock?.send({ type: 'join', seat, name })
   }
 
-  onCleanup(() => sock?.close())
+  const armBombPot = () => {
+    sock?.send({ type: 'bomb_pot' })
+  }
+
+  const devDeal = (cards: WireCard[]) => {
+    pendingDevDeal = cards.length ? cards : null
+    // already in a hand between deal + hand_started? apply to next hand
+  }
+
+  onCleanup(() => {
+    clearDealTimers()
+    sock?.close()
+  })
 
   void connect() // fire-and-forget: resolves identity, opens the socket
 
@@ -307,6 +423,8 @@ function createTableStore(tableId: string): TableStore {
     get state() { return state() },
     send,
     joinSeat,
+    armBombPot,
+    devDeal,
     get status() { return status() },
     get lastError() { return lastError() },
     get toasts() { return toasts() },
@@ -314,6 +432,28 @@ function createTableStore(tableId: string): TableStore {
   }
 }
 
-export function provideTable(tableId: string): TableStore {
-  return createTableStore(tableId)
+/** Parse a `?deal=` param like "7d2d" / "AsKs" into wire cards; null if invalid. */
+export function parseDealParam(s: string | undefined): WireCard[] | null {
+  if (!s) return null
+  const RANKS = '23456789TJQKA'
+  const SUITS = 'shdc'
+  const out: WireCard[] = []
+  for (let i = 0; i + 1 < s.length; i += 2) {
+    const r = RANKS.indexOf(s[i].toUpperCase())
+    const u = SUITS.indexOf(s[i + 1].toLowerCase())
+    if (r < 0 || u < 0) return null
+    out.push(r * 4 + u)
+  }
+  return out.length ? out : null
+}
+
+export function provideTable(tableId: string, dealParam?: string): TableStore {
+  const store = createTableStore(tableId)
+  const forced = parseDealParam(dealParam)
+  if (forced) {
+    // route through the store's dev hook: set via devDeal before connect ran is
+    // not possible (async), so hand the cards to the first hand_started instead.
+    store.devDeal(forced)
+  }
+  return store
 }

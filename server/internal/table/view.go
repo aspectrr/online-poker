@@ -5,6 +5,7 @@ import (
 
 	"github.com/aspectrr/online-poker/server/internal/engine"
 	"github.com/aspectrr/online-poker/server/internal/protocol"
+	"github.com/aspectrr/online-poker/server/internal/store"
 	"github.com/aspectrr/online-poker/server/internal/ws"
 )
 
@@ -114,15 +115,24 @@ func (t *Table) snapshotFor(viewer int) *protocol.TableState {
 		Name:     t.row.Name,
 		GameType: t.row.GameType,
 		Config: protocol.ConfigWire{
-			GameType:       t.row.GameType,
-			SmallBlind:     t.cfg.SmallBlind,
-			BigBlind:       t.cfg.BigBlind,
-			MaxSeats:       len(t.seats),
-			ActionTimeoutS: t.cfg.ActionTimeoutSecs,
+			GameType:        t.row.GameType,
+			SmallBlind:      t.cfg.SmallBlind,
+			BigBlind:        t.cfg.BigBlind,
+			MaxSeats:        len(t.seats),
+			ActionTimeoutS:  t.cfg.ActionTimeoutSecs,
+			InterHandDelayS: t.row.Config.InterHandDelayS,
+			RIT:             t.row.Config.RIT,
+			RabbitHunt:      t.row.Config.RabbitHunt,
+			SevenDeuce:      t.row.Config.SevenDeuce,
+			SevenDeuceBounty: t.row.Config.SevenDeuceBounty,
+			BombPotMode:     t.row.Config.BombPotMode,
+			BombPotTriggers: triggersWire(t.row.Config.BombPotTriggers),
 		},
-		Seats:    t.seatsWire(),
-		YourSeat: viewer,
-		HandNo:   t.handNo,
+		Seats:       t.seatsWire(),
+		YourSeat:    viewer,
+		HandNo:      t.handNo,
+		BombPotNext: t.forceBombPot,
+		BombPot:     t.bombPot && t.runner != nil,
 	}
 	if t.runner != nil {
 		st.HandInProgress = true
@@ -144,6 +154,22 @@ func (t *Table) snapshotFor(viewer int) *protocol.TableState {
 		}
 	}
 	return st
+}
+
+// triggersWire: store jsonb triggers -> display wire form.
+func triggersWire(in []store.BombPotTrigger) []protocol.TriggerWire {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]protocol.TriggerWire, 0, len(in))
+	for _, tr := range in {
+		w := protocol.TriggerWire{Rank: tr.Rank, Suit: tr.Suit}
+		if tr.Color != nil {
+			w.Color = *tr.Color
+		}
+		out = append(out, w)
+	}
+	return out
 }
 
 // runnerStreet: current street name, "" before first action.

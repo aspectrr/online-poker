@@ -7,6 +7,7 @@ package table
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"sync"
 	"time"
 
@@ -67,10 +68,18 @@ type Table struct {
 	pending  *protocol.PostHandPrompt
 	// lastDealt: previous hand's cards, for the next hand's bomb-pot triggers
 	lastDealt []engine.Card
+	// forceBombPot: next hand is a bomb pot (manual arm, bomb_pot msg)
+	forceBombPot bool
+	// bombPot: the CURRENT hand is a bomb pot (for reconnect snapshots)
+	bombPot bool
+	// devDeals: forced hole cards per seat, consumed by the next startHand
+	// (dev builds only)
+	devDeals map[int][]engine.Card
 	// handEvents: current hand's public events for persistence + late snapshot
 	handEvents  []protocol.Event
 	lastWinner  int
 	timeoutSeat int
+	dev         bool
 
 	inbox   chan inbox
 	persist Persister
@@ -139,8 +148,9 @@ func triggersToEngine(in []store.BombPotTrigger) []engine.CardTrigger {
 	return out
 }
 
-// New builds a Table from a store row and starts its goroutine.
-func New(row store.GameTable, persist Persister) *Table {
+// New builds a Table from a store row and starts its goroutine. dev
+// enables dev-only client commands (forced deals) for DEV_AUTH servers.
+func New(row store.GameTable, persist Persister, dev bool) *Table {
 	cfg := engineConfig(row)
 	ctx, cancel := context.WithCancel(context.Background())
 	t := &Table{
@@ -152,6 +162,7 @@ func New(row store.GameTable, persist Persister) *Table {
 		persist: persist,
 		ctx:     ctx,
 		stop:    cancel,
+		dev:     dev,
 	}
 	for i := range t.seats {
 		t.seats[i] = &seat{seat: i}
@@ -273,6 +284,10 @@ func (t *Table) handle(in inbox) {
 		t.chat(in.client, in.msg)
 	case "rabbit":
 		rabbitReveal(t, in)
+	case "bomb_pot":
+		t.armBombPot()
+	case "dev_deal":
+		t.devDeal(in)
 	default:
 		in.client.TrySend(protocol.ServerMsg{Type: "error", Error: "unknown message type"})
 	}
@@ -307,4 +322,79 @@ func (t *Table) join(c *ws.Client, m protocol.ClientMsg) {
 	t.broadcastSeats()
 	c.TrySend(protocol.ServerMsg{Type: "state", State: t.snapshotFor(m.Seat)})
 	t.maybeScheduleHand()
+}
+
+// ---- bomb-pot arming / dev forced deals ----
+
+// broadcastEvent: fan an event out to every connected client.
+func (t *Table) broadcastEvent(ev protocol.Event) {
+	for c := range t.clients {
+		out := ev
+		c.TrySend(protocol.ServerMsg{Type: "event", Event: &out})
+	}
+}
+
+// armBombPot: manual arm (bomb_pot msg) — next hand is a double-board bomb pot.
+func (t *Table) armBombPot() {
+	if t.forceBombPot {
+		return
+	}
+	t.forceBombPot = true
+	log.Printf("table %s: bomb pot armed manually", t.row.ID)
+	t.broadcastEvent(protocol.Event{Type: protocol.EvBombPotArmed})
+}
+
+// devDeal: force this seat's hole cards next hand (DEV_AUTH tables only).
+func (t *Table) devDeal(in inbox) {
+	if !t.dev {
+		in.client.TrySend(protocol.ServerMsg{Type: "error", Error: "dev_deal requires DEV_AUTH"})
+		return
+	}
+	s := t.seatOfClient(in.client)
+	if s == nil || len(in.msg.Cards) == 0 || len(in.msg.Cards) > 4 {
+		return
+	}
+	if t.devDeals == nil {
+		t.devDeals = map[int][]engine.Card{}
+	}
+	cards := make([]engine.Card, len(in.msg.Cards))
+	copy(cards, in.msg.Cards)
+	t.devDeals[s.seat] = cards
+}
+
+// loadedDeck: deck serving the next hand's holes so forced seats get their
+// dev-requested cards. Dealing is round-major over seat-sorted players.
+func (t *Table) loadedDeck(seats []engine.SeatState, rounds int) (engine.Deck, bool) {
+	forced := t.devDeals
+	t.devDeals = nil
+	used := map[engine.Card]bool{}
+	for _, cs := range forced {
+		for _, c := range cs {
+			used[c] = true
+		}
+	}
+	var fill []engine.Card
+	for c := engine.Card(0); c <= 51; c++ {
+		if !used[c] {
+			fill = append(fill, c)
+		}
+	}
+	order := make([]engine.Card, 0, len(seats)*rounds)
+	next := 0
+	for r := 0; r < rounds; r++ {
+		for _, s := range seats {
+			if r < len(forced[s.Seat]) {
+				order = append(order, forced[s.Seat][r])
+			} else {
+				order = append(order, fill[next])
+				next++
+			}
+		}
+	}
+	deck, err := engine.LoadedDeck(order)
+	if err != nil {
+		log.Printf("table %s: loaded deck: %v", t.row.ID, err)
+		return engine.Deck{}, false
+	}
+	return deck, true
 }

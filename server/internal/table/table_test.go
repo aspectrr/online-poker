@@ -2,6 +2,7 @@ package table
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,7 +26,7 @@ func testTable(t *testing.T, timeoutSecs, interHand int) *Table {
 			MaxSeats:        4,
 		},
 	}
-	tbl := New(row, nil)
+	tbl := New(row, nil, false)
 	t.Cleanup(tbl.Close)
 	return tbl
 }
@@ -238,4 +239,58 @@ func TestTimeoutAutoCheck(t *testing.T) {
 	if kind != "check" {
 		t.Fatalf("timeout with free check produced %q, want check", kind)
 	}
+}
+
+// bomb_pot msg arms the next hand + broadcasts bomb_pot_armed to everyone.
+func TestArmBombPotBroadcasts(t *testing.T) {
+	tbl := testTable(t, 0, 0)
+	a := connect(t, tbl, "uid-a", 0)
+	b := connect(t, tbl, "uid-b", 1)
+	tbl.Send(a, protocol.ClientMsg{Type: "bomb_pot"})
+	waitProcessed(t, tbl)
+	msgs := drain(a)
+	found := false
+	for _, m := range msgs {
+		if m.Type == "event" && m.Event != nil && m.Event.Type == protocol.EvBombPotArmed {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("armBombPot should broadcast bomb_pot_armed")
+	}
+	msgs = drain(b)
+	for _, m := range msgs {
+		if m.Type == "event" && m.Event != nil && m.Event.Type == protocol.EvBombPotArmed {
+			_ = m
+			return
+		}
+	}
+	t.Fatal("seat b should also receive bomb_pot_armed")
+}
+
+// snapshot carries bomb_pot_next while armed.
+func TestSnapshotBombPotNext(t *testing.T) {
+	tbl := testTable(t, 0, 0)
+	a := connect(t, tbl, "uid-a", 0)
+	tbl.Send(a, protocol.ClientMsg{Type: "bomb_pot"})
+	waitProcessed(t, tbl)
+	drain(a)
+	snap := tbl.snapshotFor(0)
+	if !snap.BombPotNext {
+		t.Fatal("snapshot should carry bomb_pot_next=true while armed")
+	}
+}
+
+// dev_deal is rejected on non-dev tables.
+func TestDevDealGated(t *testing.T) {
+	tbl := testTable(t, 0, 0)
+	a := connect(t, tbl, "uid-a", 0)
+	tbl.Send(a, protocol.ClientMsg{Type: "dev_deal", Seat: 0, Cards: []engine.Card{0, 1}})
+	waitProcessed(t, tbl)
+	for _, m := range drain(a) {
+		if m.Type == "error" && strings.Contains(m.Error, "DEV_AUTH") {
+			return
+		}
+	}
+	t.Fatal("dev_deal on non-dev table should error")
 }

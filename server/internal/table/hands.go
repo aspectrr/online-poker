@@ -60,8 +60,13 @@ func (t *Table) startHand() {
 		bombPot = engine.AnyTriggerMatch(t.cfg.BombPotCardTriggers, t.lastDealt)
 		t.lastDealt = nil // trigger consumed: applies to the next hand only
 	}
+	if t.forceBombPot {
+		bombPot = true
+		t.forceBombPot = false
+	}
 	cfg := t.cfg
 	cfg.BombPot = bombPot
+	t.bombPot = bombPot
 	cfg.ButtonSeat = t.button
 	cfg.HandID = t.handNo + 1
 
@@ -77,7 +82,21 @@ func (t *Table) startHand() {
 	if len(engineSeats) < 2 {
 		return
 	}
-	r, err := engine.StartHand(cfg, engineSeats)
+	var r *engine.HandRunner
+	var err error
+	holeRounds := cfg.Game.HoleCardCount()
+	if bombPot {
+		holeRounds = 4
+	}
+	if len(t.devDeals) > 0 {
+		if deck, ok := t.loadedDeck(engineSeats, holeRounds); ok {
+			r, err = engine.StartHandWithDeck(cfg, engineSeats, deck)
+		} else {
+			r, err = engine.StartHand(cfg, engineSeats)
+		}
+	} else {
+		r, err = engine.StartHand(cfg, engineSeats)
+	}
 	if err != nil {
 		log.Printf("table %s: start hand: %v", t.row.ID, err)
 		return
@@ -179,6 +198,18 @@ func (t *Table) lastWinnerSeat() int {
 	return t.lastWinner
 }
 
+// firstTriggerMatch: first dealt card matching any trigger.
+func firstTriggerMatch(triggers []engine.CardTrigger, cards []engine.Card) (engine.Card, bool) {
+	for _, c := range cards {
+		for _, tr := range triggers {
+			if tr.Matches(c) {
+				return c, true
+			}
+		}
+	}
+	return 0, false
+}
+
 // handEnded: cleanup + schedule next hand after inter-hand delay.
 func (t *Table) handEnded() {
 	// advance button to next occupied seat
@@ -188,6 +219,14 @@ func (t *Table) handEnded() {
 	}
 	t.runner = nil
 	t.pending = nil
+	t.bombPot = false
+	// banner for trigger-armed bomb pots: everyone sees it during the
+	// inter-hand delay; startHand re-matches and consumes lastDealt itself.
+	if !t.forceBombPot && len(t.lastDealt) > 0 && len(t.cfg.BombPotCardTriggers) > 0 {
+		if c, ok := firstTriggerMatch(t.cfg.BombPotCardTriggers, t.lastDealt); ok {
+			t.broadcastEvent(protocol.Event{Type: protocol.EvBombPotArmed, Cards: []engine.Card{c}})
+		}
+	}
 	delay := time.Duration(t.cfg.InterHandDelaySecs) * time.Second
 	if t.seatedCount() >= 2 {
 		t.nextHand = time.AfterFunc(delay, func() {

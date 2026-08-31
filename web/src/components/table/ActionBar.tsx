@@ -163,7 +163,12 @@ export function ActionBar(props: {
               <div>
                 <Slider
                   value={[raiseTo()]}
-                  onChange={(v: number[]) => { setRaising(true); setRaiseTo(Math.round(v[0])) }}
+                  onChange={(v) => {
+                    // Kobalte echoes the current value on re-render; without this
+                    // guard the echo clobbers preset clicks back to the old amount.
+                    const nv = Math.round(v[0]);
+                    if (nv !== raiseTo()) { setRaising(true); setRaiseTo(nv); }
+                  }}
                   minValue={legal()!.minRaiseToCents}
                   maxValue={legal()!.maxRaiseToCents}
                   step={t().street === 'preflop' ? t().sbCents : 1}
