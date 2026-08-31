@@ -25,6 +25,8 @@ export function Seat(props: {
   /** px offset from felt center — deal animation flight origin */
   dealDx: number;
   dealDy: number;
+  /** first-to-act landing pulse right after the opening deal */
+  landing?: boolean;
   /** present when a spectator may take this empty seat */
   onJoin?: () => void;
   class?: string;
@@ -120,6 +122,7 @@ export function Seat(props: {
             classList={{
               "ring-2 ring-accent/60 shadow-[0_0_24px_rgba(212,175,55,0.35)] animate-[glow_1.6s_ease-in-out_infinite]":
                 acting(),
+              "animate-landing": !!props.landing,
             }}
           >
             {/* timer arc: svg circle around the nameplate */}
@@ -154,14 +157,6 @@ export function Seat(props: {
               >
                 {props.isHero ? "you" : s().player}
               </span>
-              <Show when={t().buttonSeat === s().seat}>
-                <span
-                  class="grid size-4 flex-none place-items-center rounded-full bg-white text-[9px] font-bold text-black shadow"
-                  title="Dealer button"
-                >
-                  D
-                </span>
-              </Show>
             </div>
             <div class="flex items-baseline justify-between gap-2">
               <span class="text-[13px] font-bold tabular-nums text-fg">

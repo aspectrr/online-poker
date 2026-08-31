@@ -167,9 +167,10 @@ func startHand(cfg TableConfig, seats []SeatState, d Deck) (*HandRunner, error) 
 	}
 
 	r.setupEvents = []Event{{
-		Type:    EvHandStarted,
-		HandID:  r.handID,
-		BombPot: r.bombPot,
+		Type:       EvHandStarted,
+		HandID:     r.handID,
+		BombPot:    r.bombPot,
+		ButtonSeat: &cfg.ButtonSeat,
 	}}
 
 	if r.bombPot {

@@ -1,6 +1,6 @@
 import { createSignal, onCleanup } from "solid-js";
 import { TableSocket, tableWsUrl } from "../lib/ws";
-import { authIdentity } from "../lib/identity";
+import { authIdentity, rememberGuestName } from "../lib/identity";
 import {
   actionLabel,
   cardText,
@@ -22,6 +22,9 @@ import {
 import { money } from "../lib/money";
 
 const API_URL = import.meta.env.VITE_API_URL as string | undefined;
+
+/** Dealer-chip travel time; dealing waits for it when the button moves. */
+export const BUTTON_TRAVEL_MS = 700;
 
 const emptySeat = (seat: number): TableState["seats"][number] => ({
   seat,
@@ -56,6 +59,7 @@ function initialState(tableId: string): TableState {
     maxSeats: 6,
     heroSeat: -1,
     buttonSeat: -1,
+    landingSeat: -1,
     street: "preflop",
     potCents: 0,
     board: { street: "preflop", boards: [[]] },
@@ -97,8 +101,7 @@ function createTableStore(tableId: string): TableStore {
   >([]);
 
   let sock: TableSocket | null = null;
-  let name: string | null = null;
-  let joinSent = false; // latch: don't re-join every snapshot
+  let me: { name: string; isGuest: boolean } | null = null;
   let toastId = 0;
   let dealTimers: ReturnType<typeof setTimeout>[] = [];
   let pendingDevDeal: WireCard[] | null = null; // ?deal= param → sent on next hand start
@@ -120,11 +123,12 @@ function createTableStore(tableId: string): TableStore {
   };
 
   /**
-   * Opening deal choreography (client-side theater): one card per seated
-   * player clockwise from left of the button, round by round. per-card
-   * 170ms, 260ms pause between rounds — ~2.5s at a full 6-max table.
+   * Opening-deal choreography: dealer button glides to its new seat, then
+   * one card per seated player clockwise from left of the button, round by
+   * round. per-card 170ms, 260ms pause between rounds. When the button
+   * moved, dealing waits for the button travel (BUTTON_TRAVEL_MS).
    */
-  const scheduleDeal = (s: TableState, bombPot: boolean) => {
+  const scheduleDeal = (s: TableState, bombPot: boolean, buttonMoved = false) => {
     clearDealTimers();
     const rounds = bombPot ? 4 : 2;
     const n = s.seats.length;
@@ -139,7 +143,7 @@ function createTableStore(tableId: string): TableStore {
     if (inHand.length === 0) return;
     const perCard = 170;
     const roundGap = 260;
-    let t = 0;
+    let t = buttonMoved ? BUTTON_TRAVEL_MS : 0;
     for (let r = 0; r < rounds; r++) {
       for (const seat of inHand) {
         dealTimers.push(
@@ -155,7 +159,21 @@ function createTableStore(tableId: string): TableStore {
       }
       t += roundGap;
     }
-    dealTimers.push(setTimeout(() => patch({ dealDone: true }), t));
+    dealTimers.push(
+      setTimeout(() => {
+        patch({ dealDone: true });
+        // action "lands" on first-to-act (UTG) once the last card is out
+        const utg = state().toAct;
+        if (utg >= 0) {
+          patch({ landingSeat: utg });
+          dealTimers.push(
+            setTimeout(() => {
+              if (state().landingSeat === utg) patch({ landingSeat: -1 });
+            }, 1400),
+          );
+        }
+      }, t),
+    );
   };
 
   const reduce = (m: ServerMsg) => {
@@ -193,7 +211,6 @@ function createTableStore(tableId: string): TableStore {
       case "error":
         setLastError(m.error);
         setTimeout(() => setLastError((e) => (e === m.error ? null : e)), 4000);
-        if (m.error.includes("seat taken")) joinSent = false; // try the next open seat
         break;
     }
   };
@@ -235,6 +252,7 @@ function createTableStore(tableId: string): TableStore {
         holeCards: snap.your_cards?.length ? [uiCards(snap.your_cards)] : inHand ? s.holeCards : [],
         toAct: snap.to_act_seat ?? -1,
         deadlineUnixMs: snap.deadline_unix_ms || null,
+        landingSeat: -1,
         turnTimeoutMs: Math.max(1000, (snap.config.action_timeout_s || 20) * 1000),
         legal,
         message: inHand ? s.message : "Waiting for players…",
@@ -257,16 +275,6 @@ function createTableStore(tableId: string): TableStore {
         }),
       };
     });
-    maybeAutoJoin();
-  };
-
-  const maybeAutoJoin = () => {
-    const s = state();
-    if (joinSent || !name || s.heroSeat >= 0) return;
-    const open = s.seats.find((x) => !x.player)?.seat;
-    if (open == null) return;
-    joinSent = true;
-    sock?.send({ type: "join", seat: open, name });
   };
 
   const applyEvent = (e: GameEvent) => {
@@ -276,6 +284,9 @@ function createTableStore(tableId: string): TableStore {
     switch (e.type) {
       case "hand_started": {
         const bombPot = e.bomb_pot ?? false;
+        const prevButton = state().buttonSeat;
+        const btn = e.button_seat;
+        const buttonMoved = btn != null && btn !== prevButton;
         setState((s) => ({
           ...s,
           handNo: e.hand_id || s.handNo + 1,
@@ -291,6 +302,8 @@ function createTableStore(tableId: string): TableStore {
           postHand: null,
           bombPotArmed: null,
           boardWins: [],
+          landingSeat: -1,
+          buttonSeat: btn ?? s.buttonSeat,
           dealTotal: bombPot ? 4 : 2,
           dealt: Array.from({ length: s.seats.length }, () => 0),
           dealDone: false,
@@ -303,7 +316,7 @@ function createTableStore(tableId: string): TableStore {
             revealedCards: undefined,
           })),
         }));
-        scheduleDeal(state(), bombPot);
+        scheduleDeal(state(), bombPot, buttonMoved);
         // hidden dev flag: force hero hole cards (server honors only in dev builds)
         if (pendingDevDeal && state().heroSeat >= 0) {
           sock?.send({ type: "dev_deal", seat: state().heroSeat, cards: pendingDevDeal });
@@ -472,13 +485,13 @@ function createTableStore(tableId: string): TableStore {
       setStatus("closed");
       return;
     }
-    const id = await authIdentity();
+    const id = await authIdentity().catch(() => null);
     if (!id) {
-      patch({ message: "sign in to play (dev: add ?dev=you@example.com to the URL)" });
+      patch({ message: "couldn't reach the server — refresh to retry" });
       setStatus("closed");
       return;
     }
-    name = id.name;
+    me = { name: id.name, isGuest: id.isGuest };
     sock = new TableSocket(tableWsUrl(API_URL, tableId), id.token, reduce, setStatus);
     sock.connect();
   };
@@ -490,10 +503,12 @@ function createTableStore(tableId: string): TableStore {
     else sock?.send({ type: "action", kind: a.kind });
   };
 
-  const joinSeat = (seat: number) => {
-    if (!name) return;
-    joinSent = true;
-    sock?.send({ type: "join", seat, name });
+  const joinSeat = (seat: number, guestName?: string, stackCents?: number) => {
+    if (guestName && me?.isGuest) {
+      me = { ...me, name: guestName };
+      rememberGuestName(guestName);
+    }
+    sock?.send({ type: "join", seat, name: me?.name, stack: stackCents });
   };
 
   const armBombPot = () => {
@@ -520,6 +535,9 @@ function createTableStore(tableId: string): TableStore {
     joinSeat,
     armBombPot,
     devDeal,
+    get me() {
+      return me;
+    },
     get status() {
       return status();
     },

@@ -131,6 +131,7 @@ export function createDemoTable(tableId: string): TableStore {
     maxSeats: MAX,
     heroSeat: HERO,
     buttonSeat: 0,
+    landingSeat: -1,
     street: "preflop",
     potCents: 0,
     board: { street: "preflop", boards: [[]] },
@@ -360,6 +361,9 @@ export function createDemoTable(tableId: string): TableStore {
     },
     send,
     joinSeat: () => {}, // demo seats everyone up front
+    get me() {
+      return { name: "you", isGuest: true } as const;
+    },
     armBombPot: () => {},
     devDeal: () => {},
     dispose: clearAll,
