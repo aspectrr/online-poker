@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Pre-commit checks for both halves of the repo.
+# Enable once: git config core.hooksPath .githooks
+set -euo pipefail
+root="$(git rev-parse --show-toplevel)"
+fail=0
+
+step() { printf '\n==> %s\n' "$1"; }
+
+# --- server (Go) -------------------------------------------------------------
+cd "$root/server"
+
+step "server: gofmt"
+unformatted="$(gofmt -l .)"
+if [ -n "$unformatted" ]; then echo "$unformatted"; fail=1; fi
+
+step "server: go vet"
+go vet ./... || fail=1
+
+step "server: go test"
+go test ./... || fail=1
+
+# --- web (Bun) ---------------------------------------------------------------
+cd "$root/web"
+
+if [ ! -d node_modules ]; then
+  step "web: bun install"
+  bun install --frozen-lockfile || fail=1
+fi
+
+step "web: format check"
+bun run fmt:check || fail=1
+
+step "web: oxlint"
+bun run lint || fail=1
+
+step "web: typecheck"
+bun --bun tsc -b || fail=1
+
+step "web: self-check"
+bun run check || fail=1
+
+if [ "$fail" -ne 0 ]; then
+  echo >&2 "
+pre-commit checks failed — commit aborted."
+  exit 1
+fi
+
+printf '\nall checks passed\n'

@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-func intp(i int) *int         { return &i }
-func strp(s string) *string   { return &s }
+func intp(i int) *int       { return &i }
+func strp(s string) *string { return &s }
 
 func validConfig() TableConfig {
 	return TableConfig{

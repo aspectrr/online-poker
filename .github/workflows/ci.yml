@@ -1,0 +1,57 @@
+# CI for the poker monorepo. PRs need both jobs green to merge
+# (branch protection on main requires the `server` and `web` checks).
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: gofmt
+        working-directory: server
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - name: vet
+        working-directory: server
+        run: go vet ./...
+      - name: build
+        working-directory: server
+        run: go build ./...
+      - name: test
+        working-directory: server
+        run: go test ./...
+      - name: docker build (fly deploys this image)
+        working-directory: server
+        run: docker build -t online-poker-server:ci .
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: install
+        working-directory: web
+        run: bun install --frozen-lockfile
+      - name: lint
+        working-directory: web
+        run: bun run lint
+      - name: format check
+        working-directory: web
+        run: bun run fmt:check
+      - name: typecheck
+        working-directory: web
+        run: bun --bun tsc -b
+      - name: self-check
+        working-directory: web
+        run: bun run check
+      - name: build
+        working-directory: web
+        run: bun run build

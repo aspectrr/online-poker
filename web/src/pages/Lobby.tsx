@@ -1,47 +1,47 @@
-import { For, Show, createResource, createSignal, onMount } from 'solid-js'
-import { A, useNavigate } from '@solidjs/router'
-import { Button } from '../components/ui/Button'
-import { CreateTableDialog } from '../components/CreateTableDialog'
-import { FeedbackDialog } from '../components/FeedbackDialog'
-import { MOCK_MODE, listTables } from '../lib/api'
-import { supabase } from '../lib/supabase'
-import { blinds, money } from '../lib/money'
-import type { TableSummary } from '../lib/types'
-import { cn } from '../lib/cn'
+import { For, Show, createResource, createSignal, onMount } from "solid-js";
+import { A, useNavigate } from "@solidjs/router";
+import { Logo } from "../components/Logo";
+import { Button } from "../components/ui/Button";
+import { CreateTableDialog } from "../components/CreateTableDialog";
+import { FeedbackDialog } from "../components/FeedbackDialog";
+import { MOCK_MODE, listTables } from "../lib/api";
+import { supabase } from "../lib/supabase";
+import { blinds, money } from "../lib/money";
+import type { TableSummary } from "../lib/types";
+import { cn } from "../lib/cn";
 
 // Seat pip hues — rotate the Notion accent cast (DESIGN.md)
-const PIP_HUES = ['bg-sky-wash', 'bg-marigold', 'bg-coral', 'bg-accent', 'bg-midnight']
+const PIP_HUES = ["bg-sky-wash", "bg-marigold", "bg-coral", "bg-accent", "bg-midnight"];
 
 export function LobbyPage() {
   // Never let the fetcher reject — a rejected resource leaves the lobby
   // pending forever under the router; a result object always settles.
   const [tables, { refetch }] = createResource(async () => {
     try {
-      return { ok: true as const, rows: await listTables() }
+      return { ok: true as const, rows: await listTables() };
     } catch (e) {
-      return { ok: false as const, err: e instanceof Error ? e.message : String(e) }
+      return { ok: false as const, err: e instanceof Error ? e.message : String(e) };
     }
-  })
-  const navigate = useNavigate()
-  const failed = () => !tables.loading && tables.latest != null && !tables.latest.ok
+  });
+  const navigate = useNavigate();
+  const failed = () => !tables.loading && tables.latest != null && !tables.latest.ok;
 
   // auth state for the nav (ASPTR-193e): sign out when a supabase session exists
-  const [authed, setAuthed] = createSignal(false)
+  const [authed, setAuthed] = createSignal(false);
   onMount(async () => {
-    const sb = supabase()
-    if (!sb) return
-    const { data } = await sb.auth.getSession()
-    setAuthed(!!data.session)
-  })
+    const sb = supabase();
+    if (!sb) return;
+    const { data } = await sb.auth.getSession();
+    setAuthed(!!data.session);
+  });
   const signOut = async () => {
-    await supabase()?.auth.signOut()
-    setAuthed(false)
-  }
+    await supabase()?.auth.signOut();
+    setAuthed(false);
+  };
 
   const onJoin = async (t: TableSummary) => {
-
-    navigate(`/table/${t.id}${location.search}`)
-  }
+    navigate(`/table/${t.id}${location.search}`);
+  };
 
   return (
     <div class="flex min-h-dvh flex-col bg-bg">
@@ -49,14 +49,9 @@ export function LobbyPage() {
         <div class="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
           <A href="/" class="flex items-center gap-2.5">
             <span class="grid size-8 place-items-center rounded-btn bg-accent-tint text-accent">
-              <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <path d="M4 9c5.5 0 10.5-2 16-2v10c-5.5 0-10.5 2-16 2V9Z" />
-                <path d="M4 11c1.5 0 2.5 1 2.5 2S5.5 15 4 15" />
-              </svg>
+              <Logo class="size-5" />
             </span>
-            <span class="font-display text-base font-bold tracking-tight text-fg">
-              aspectrr
-            </span>
+            <span class="font-display text-base font-bold tracking-tight text-fg">riverrats</span>
           </A>
           <div class="flex items-center gap-3">
             <Show when={MOCK_MODE}>
@@ -68,11 +63,15 @@ export function LobbyPage() {
               when={authed()}
               fallback={
                 <A href="/auth">
-                  <Button variant="outline" size="sm">Sign in</Button>
+                  <Button variant="outline" size="sm">
+                    Sign in
+                  </Button>
                 </A>
               }
             >
-              <Button variant="text" size="sm" onClick={signOut}>Sign out</Button>
+              <Button variant="text" size="sm" onClick={signOut}>
+                Sign out
+              </Button>
             </Show>
           </div>
         </div>
@@ -85,11 +84,16 @@ export function LobbyPage() {
               Tables
             </h1>
             <p class="mt-1 text-sm text-fg-muted">
-              <Show when={tables.latest?.ok ? tables.latest.rows : undefined} fallback={failed() ? 'Tables unavailable' : 'Loading tables…'}>
-                {(rows) => <>
-                  {rows().length} live
-                  <Show when={MOCK_MODE}> · demo lobby, backend not configured</Show>
-                </>}
+              <Show
+                when={tables.latest?.ok ? tables.latest.rows : undefined}
+                fallback={failed() ? "Tables unavailable" : "Loading tables…"}
+              >
+                {(rows) => (
+                  <>
+                    {rows().length} live
+                    <Show when={MOCK_MODE}> · demo lobby, backend not configured</Show>
+                  </>
+                )}
               </Show>
             </p>
           </div>
@@ -99,8 +103,12 @@ export function LobbyPage() {
         <Show when={failed()}>
           <div class="mt-10 flex flex-col items-center gap-3 rounded-card border border-danger/30 bg-surface px-6 py-12 text-center">
             <p class="font-medium text-fg">Couldn't load tables</p>
-            <p class="text-sm text-fg-muted">{tables.latest && !tables.latest.ok ? tables.latest.err : ''}</p>
-            <Button size="sm" variant="outline" onClick={() => refetch()}>Retry</Button>
+            <p class="text-sm text-fg-muted">
+              {tables.latest && !tables.latest.ok ? tables.latest.err : ""}
+            </p>
+            <Button size="sm" variant="outline" onClick={() => refetch()}>
+              Retry
+            </Button>
           </div>
         </Show>
 
@@ -111,7 +119,9 @@ export function LobbyPage() {
               <Show when={!tables.loading} fallback={<TableSkeleton />}>
                 <div class="mt-10 grid place-items-center rounded-card border border-dashed border-black/15 bg-surface px-6 py-16 text-center">
                   <p class="font-medium text-fg">No tables yet</p>
-                  <p class="mt-1 text-sm text-fg-muted">Deal yourself in — create the first table.</p>
+                  <p class="mt-1 text-sm text-fg-muted">
+                    Deal yourself in — create the first table.
+                  </p>
                 </div>
               </Show>
             </Show>
@@ -130,7 +140,7 @@ export function LobbyPage() {
         <FeedbackDialog />
       </footer>
     </div>
-  )
+  );
 }
 
 function TableSkeleton() {
@@ -140,22 +150,20 @@ function TableSkeleton() {
         <div data-i={i} class="h-44 animate-pulse rounded-card border border-line bg-surface" />
       ))}
     </div>
-  )
+  );
 }
 
 function TableCard(props: { table: TableSummary; onJoin: () => void }) {
-  const t = () => props.table
-  const full = () => t().seatsFilled >= t().maxSeats
+  const t = () => props.table;
+  const full = () => t().seatsFilled >= t().maxSeats;
   return (
     <article class="group flex flex-col rounded-card border border-line bg-surface p-5 transition-[border-color] duration-200 ease-out hover:border-black/20">
       <div class="flex items-start justify-between gap-3">
         <h2 class="font-display text-base font-semibold leading-tight text-fg">{t().name}</h2>
         <span
           class={cn(
-            'flex-none rounded-pill px-2 py-0.5 text-[11px] font-semibold tracking-wide',
-            t().gameType === 'PLO4'
-              ? 'bg-marigold text-black'
-              : 'bg-surface-raised text-fg-muted',
+            "flex-none rounded-pill px-2 py-0.5 text-[11px] font-semibold tracking-wide",
+            t().gameType === "PLO4" ? "bg-marigold text-black" : "bg-surface-raised text-fg-muted",
           )}
         >
           {t().gameType}
@@ -165,23 +173,29 @@ function TableCard(props: { table: TableSummary; onJoin: () => void }) {
       <dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         <div class="flex flex-col">
           <dt class="text-xs text-fg-muted">Blinds</dt>
-          <dd class="font-medium tabular-nums text-fg">{blinds(t().smallBlindCents, t().bigBlindCents)}</dd>
+          <dd class="font-medium tabular-nums text-fg">
+            {blinds(t().smallBlindCents, t().bigBlindCents)}
+          </dd>
         </div>
         <div class="flex flex-col">
           <dt class="text-xs text-fg-muted">Avg pot</dt>
           <dd class="font-medium tabular-nums text-fg">
-            {t().avgPotCents != null ? money(t().avgPotCents!) : '—'}
+            {t().avgPotCents != null ? money(t().avgPotCents!) : "—"}
           </dd>
         </div>
       </dl>
 
-      <div class="mt-4 flex items-center gap-1.5" role="img" aria-label={`${t().seatsFilled} of ${t().maxSeats} seats taken`}>
+      <div
+        class="mt-4 flex items-center gap-1.5"
+        role="img"
+        aria-label={`${t().seatsFilled} of ${t().maxSeats} seats taken`}
+      >
         <For each={Array.from({ length: t().maxSeats })}>
           {(_, i) => (
             <span
               class={cn(
-                'h-1.5 flex-1 rounded-pill transition-colors duration-200',
-                i() < t().seatsFilled ? PIP_HUES[i() % PIP_HUES.length] : 'bg-black/10',
+                "h-1.5 flex-1 rounded-pill transition-colors duration-200",
+                i() < t().seatsFilled ? PIP_HUES[i() % PIP_HUES.length] : "bg-black/10",
               )}
             />
           )}
@@ -192,15 +206,12 @@ function TableCard(props: { table: TableSummary; onJoin: () => void }) {
         <span class="text-sm tabular-nums text-fg-muted">
           {t().seatsFilled}/{t().maxSeats} seated
         </span>
-        <Show
-          when={!full()}
-          fallback={<span class="text-sm font-medium text-danger">Full</span>}
-        >
+        <Show when={!full()} fallback={<span class="text-sm font-medium text-danger">Full</span>}>
           <Button size="sm" variant="default" onClick={props.onJoin}>
             Join
           </Button>
         </Show>
       </div>
     </article>
-  )
+  );
 }

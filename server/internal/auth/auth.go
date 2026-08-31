@@ -49,11 +49,11 @@ func New(supabaseURL, anonKey string) (*Validator, error) {
 		return nil, fmt.Errorf("auth: parse SUPABASE_URL: %w", err)
 	}
 	return &Validator{
-		jwksURL:   u.String() + "/auth/v1/.well-known/jwks.json",
-		audience:  anonKey,
-		issuer:    u.String() + "/auth/v1",
-		keys:      map[string]*rsa.PublicKey{},
-		client:    &http.Client{Timeout: 10 * time.Second},
+		jwksURL:  u.String() + "/auth/v1/.well-known/jwks.json",
+		audience: anonKey,
+		issuer:   u.String() + "/auth/v1",
+		keys:     map[string]*rsa.PublicKey{},
+		client:   &http.Client{Timeout: 10 * time.Second},
 	}, nil
 }
 

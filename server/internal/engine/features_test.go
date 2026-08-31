@@ -338,7 +338,7 @@ func TestRITNotClonedWhileBettingPossible(t *testing.T) {
 		t.Fatal(err)
 	}
 	evs := tick(t, r)
-	evs = append(evs, act(t, r, Action{Seat: 0, Kind: Call})...) // SB completes
+	evs = append(evs, act(t, r, Action{Seat: 0, Kind: Call})...)  // SB completes
 	evs = append(evs, act(t, r, Action{Seat: 1, Kind: Check})...) // BB checks -> flop
 	// postflop betting must still be possible: two boards would be wrong
 	if len(r.Board()) != 1 {

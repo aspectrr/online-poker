@@ -175,10 +175,10 @@ func main() {
 			}
 			uid := auth.UserID(r.Context())
 			row := store.GameTable{
-				ID:       "dev-" + newDevID(),
-				Name:     req.Name,
-				GameType: req.GameType,
-				Config:   cfg,
+				ID:        "dev-" + newDevID(),
+				Name:      req.Name,
+				GameType:  req.GameType,
+				Config:    cfg,
 				CreatedBy: &uid,
 			}
 			mu.Lock()
@@ -398,8 +398,8 @@ func intPtr(i int) *int { return &i }
 // memHands: in-memory hand history for DEV_AUTH no-DB mode. Satisfies
 // table.Persister (InsertHand) + serves the GET /hands route (ListHands).
 type memHands struct {
-	mu    sync.Mutex
-	seq   int64
+	mu     sync.Mutex
+	seq    int64
 	tables map[string][]store.Hand // newest last
 }
 

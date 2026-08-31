@@ -174,7 +174,7 @@ type SeatState struct {
 // Action a player takes on their turn.
 type Action struct {
 	Seat   int        `json:"seat"`
-	Kind   ActionKind `json:"kind"` // marshals as the string name (fold/check/…)
+	Kind   ActionKind `json:"kind"`             // marshals as the string name (fold/check/…)
 	Amount int64      `json:"amount,omitempty"` // raise-TO total for Raise, cents
 }
 

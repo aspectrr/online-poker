@@ -1,43 +1,45 @@
-import { createSignal, For, Show } from 'solid-js'
-import { Dialog, DialogContent, DialogTrigger } from './ui/Dialog'
-import { Button } from './ui/Button'
-import { Field, Select } from './ui/Select'
-import { submitFeedback } from '../lib/feedback'
-import { cn } from '../lib/cn'
+import { createSignal, For, Show } from "solid-js";
+import { Dialog, DialogContent, DialogTrigger } from "./ui/Dialog";
+import { Button } from "./ui/Button";
+import { Field, Select } from "./ui/Select";
+import { submitFeedback } from "../lib/feedback";
+import { cn } from "../lib/cn";
 
 /**
  * Footer feedback widget (ASPTR-192): textarea + optional 1-5 star rating +
  * severity select. Success toast; failure inline error. No new deps.
  */
 export function FeedbackDialog(props: { class?: string }) {
-  const [open, setOpen] = createSignal(false)
-  const [message, setMessage] = createSignal('')
-  const [rating, setRating] = createSignal(0)
-  const [severity, setSeverity] = createSignal('info')
-  const [sending, setSending] = createSignal(false)
-  const [error, setError] = createSignal<string | null>(null)
-  const [toast, setToast] = createSignal(false)
+  const [open, setOpen] = createSignal(false);
+  const [message, setMessage] = createSignal("");
+  const [rating, setRating] = createSignal(0);
+  const [severity, setSeverity] = createSignal("info");
+  const [sending, setSending] = createSignal(false);
+  const [error, setError] = createSignal<string | null>(null);
+  const [toast, setToast] = createSignal(false);
 
   const submit = async () => {
-    if (!message().trim() || sending()) return
-    setSending(true)
-    setError(null)
+    if (!message().trim() || sending()) return;
+    setSending(true);
+    setError(null);
     try {
       await submitFeedback({
         message: message().trim(),
         rating: rating() || undefined,
-        severity: severity() as 'info' | 'suggestion' | 'bug',
-      })
-      setOpen(false)
-      setMessage(''); setRating(0); setSeverity('info')
-      setToast(true)
-      setTimeout(() => setToast(false), 3500)
+        severity: severity() as "info" | "suggestion" | "bug",
+      });
+      setOpen(false);
+      setMessage("");
+      setRating(0);
+      setSeverity("info");
+      setToast(true);
+      setTimeout(() => setToast(false), 3500);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong')
+      setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
-      setSending(false)
+      setSending(false);
     }
-  }
+  };
 
   return (
     <>
@@ -46,7 +48,7 @@ export function FeedbackDialog(props: { class?: string }) {
           as={Button}
           variant="text"
           size="sm"
-          class={cn('text-fg-muted hover:text-fg', props.class)}
+          class={cn("text-fg-muted hover:text-fg", props.class)}
         >
           Feedback
         </DialogTrigger>
@@ -76,13 +78,19 @@ export function FeedbackDialog(props: { class?: string }) {
                         type="button"
                         role="radio"
                         aria-checked={rating() === n}
-                        aria-label={`${n} star${n > 1 ? 's' : ''}`}
+                        aria-label={`${n} star${n > 1 ? "s" : ""}`}
                         class="rounded p-0.5 transition-colors hover:bg-surface-raised"
                         onClick={() => setRating(rating() === n ? 0 : n)}
                       >
                         <svg
+                          aria-hidden="true"
                           viewBox="0 0 24 24"
-                          class={cn('size-5', n <= rating() ? 'fill-marigold stroke-marigold' : 'fill-none stroke-black/30')}
+                          class={cn(
+                            "size-5",
+                            n <= rating()
+                              ? "fill-marigold stroke-marigold"
+                              : "fill-none stroke-black/30",
+                          )}
                           stroke-width="1.6"
                         >
                           <path d="M12 2.5l2.95 5.98 6.6.96-4.78 4.66 1.13 6.58L12 17.57l-5.9 3.1 1.13-6.57L2.45 9.44l6.6-.96L12 2.5z" />
@@ -97,9 +105,9 @@ export function FeedbackDialog(props: { class?: string }) {
                   value={severity()}
                   onChange={setSeverity}
                   options={[
-                    { value: 'info', label: 'Info' },
-                    { value: 'suggestion', label: 'Suggestion' },
-                    { value: 'bug', label: 'Bug' },
+                    { value: "info", label: "Info" },
+                    { value: "suggestion", label: "Suggestion" },
+                    { value: "bug", label: "Bug" },
                   ]}
                 />
               </Field>
@@ -112,9 +120,11 @@ export function FeedbackDialog(props: { class?: string }) {
             </Show>
 
             <div class="flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
               <Button size="sm" disabled={!message().trim() || sending()} onClick={submit}>
-                {sending() ? 'Sending…' : 'Send'}
+                {sending() ? "Sending…" : "Send"}
               </Button>
             </div>
           </div>
@@ -130,5 +140,5 @@ export function FeedbackDialog(props: { class?: string }) {
         </div>
       </Show>
     </>
-  )
+  );
 }

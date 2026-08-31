@@ -101,15 +101,15 @@ func engineConfig(row store.GameTable) engine.TableConfig {
 		sb, bb = row.Config.BlindsSBBB[0], row.Config.BlindsSBBB[1]
 	}
 	cfg := engine.TableConfig{
-		Game:               engine.NLHE,
-		SmallBlind:         sb,
-		BigBlind:           bb,
-		StartingStackBB:    int64(row.Config.StartingStackBB),
-		ActionTimeoutSecs:  row.Config.ActionTimeoutS,
-		InterHandDelaySecs: row.Config.InterHandDelayS,
-		RunItTwice:         row.Config.RIT,
-		RabbitHunt:         row.Config.RabbitHunt,
-		BombPotEveryNHands: 0,
+		Game:                engine.NLHE,
+		SmallBlind:          sb,
+		BigBlind:            bb,
+		StartingStackBB:     int64(row.Config.StartingStackBB),
+		ActionTimeoutSecs:   row.Config.ActionTimeoutS,
+		InterHandDelaySecs:  row.Config.InterHandDelayS,
+		RunItTwice:          row.Config.RIT,
+		RabbitHunt:          row.Config.RabbitHunt,
+		BombPotEveryNHands:  0,
 		BombPotCardTriggers: triggersToEngine(row.Config.BombPotTriggers),
 	}
 	// 7-2 is NLHE-only in the engine; don't arm it on PLO4 tables.
