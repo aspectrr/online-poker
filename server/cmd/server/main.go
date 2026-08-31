@@ -237,7 +237,6 @@ func main() {
 	handle := func(h http.Handler) http.Handler {
 		return validator.Middleware(h)
 	}
-	public := func(h http.Handler) http.Handler { return h }
 	mux.Handle("POST /api/tables", handle(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if st == nil {
 			postTables(w, r)
@@ -268,7 +267,7 @@ func main() {
 		writeJSON(w, http.StatusCreated, row)
 	})))
 
-	mux.Handle("GET /api/tables", public(handle(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("GET /api/tables", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if st == nil {
 			if devAuth {
 				getTables(w, r)
@@ -283,7 +282,7 @@ func main() {
 			return
 		}
 		writeJSON(w, http.StatusOK, rows)
-	}))))
+	}))
 
 	mux.Handle("GET /api/tables/{id}", handle(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if st == nil {
