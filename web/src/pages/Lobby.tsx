@@ -1,8 +1,10 @@
-import { For, Show, createResource } from 'solid-js'
+import { For, Show, createResource, createSignal, onMount } from 'solid-js'
 import { A, useNavigate } from '@solidjs/router'
 import { Button } from '../components/ui/Button'
 import { CreateTableDialog } from '../components/CreateTableDialog'
+import { FeedbackDialog } from '../components/FeedbackDialog'
 import { MOCK_MODE, listTables } from '../lib/api'
+import { supabase } from '../lib/supabase'
 import { blinds, money } from '../lib/money'
 import type { TableSummary } from '../lib/types'
 import { cn } from '../lib/cn'
@@ -11,8 +13,30 @@ import { cn } from '../lib/cn'
 const PIP_HUES = ['bg-sky-wash', 'bg-marigold', 'bg-coral', 'bg-accent', 'bg-midnight']
 
 export function LobbyPage() {
-  const [tables, { refetch }] = createResource(listTables)
+  // Never let the fetcher reject — a rejected resource leaves the lobby
+  // pending forever under the router; a result object always settles.
+  const [tables, { refetch }] = createResource(async () => {
+    try {
+      return { ok: true as const, rows: await listTables() }
+    } catch (e) {
+      return { ok: false as const, err: e instanceof Error ? e.message : String(e) }
+    }
+  })
   const navigate = useNavigate()
+  const failed = () => !tables.loading && tables.latest != null && !tables.latest.ok
+
+  // auth state for the nav (ASPTR-193e): sign out when a supabase session exists
+  const [authed, setAuthed] = createSignal(false)
+  onMount(async () => {
+    const sb = supabase()
+    if (!sb) return
+    const { data } = await sb.auth.getSession()
+    setAuthed(!!data.session)
+  })
+  const signOut = async () => {
+    await supabase()?.auth.signOut()
+    setAuthed(false)
+  }
 
   const onJoin = async (t: TableSummary) => {
 
@@ -20,7 +44,7 @@ export function LobbyPage() {
   }
 
   return (
-    <div class="min-h-dvh bg-bg">
+    <div class="flex min-h-dvh flex-col bg-bg">
       <header class="sticky top-0 z-40 border-b border-line bg-surface/90 backdrop-blur-md shadow-[0px_0.7px_1.462px_0px_rgb(0_0_0/0.015),0px_3px_9px_0px_rgb(0_0_0/0.03)]">
         <div class="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
           <A href="/" class="flex items-center gap-2.5">
@@ -40,25 +64,30 @@ export function LobbyPage() {
                 mock data
               </span>
             </Show>
-            <A href="/auth">
-              <Button variant="outline" size="sm">
-                Sign in
-              </Button>
-            </A>
+            <Show
+              when={authed()}
+              fallback={
+                <A href="/auth">
+                  <Button variant="outline" size="sm">Sign in</Button>
+                </A>
+              }
+            >
+              <Button variant="text" size="sm" onClick={signOut}>Sign out</Button>
+            </Show>
           </div>
         </div>
       </header>
 
-      <main class="mx-auto max-w-6xl px-4 pt-8 pb-16 sm:px-6">
+      <main class="mx-auto w-full max-w-6xl flex-1 px-4 pt-8 pb-16 sm:px-6">
         <div class="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 class="font-display text-2xl font-bold tracking-tight text-fg sm:text-3xl">
               Tables
             </h1>
             <p class="mt-1 text-sm text-fg-muted">
-              <Show when={tables.latest} fallback="Loading tables…">
-                {(list) => <>
-                  {list().length} live
+              <Show when={tables.latest?.ok ? tables.latest.rows : undefined} fallback={failed() ? 'Tables unavailable' : 'Loading tables…'}>
+                {(rows) => <>
+                  {rows().length} live
                   <Show when={MOCK_MODE}> · demo lobby, backend not configured</Show>
                 </>}
               </Show>
@@ -67,24 +96,39 @@ export function LobbyPage() {
           <CreateTableDialog onCreated={() => refetch()} />
         </div>
 
+        <Show when={failed()}>
+          <div class="mt-10 flex flex-col items-center gap-3 rounded-card border border-danger/30 bg-surface px-6 py-12 text-center">
+            <p class="font-medium text-fg">Couldn't load tables</p>
+            <p class="text-sm text-fg-muted">{tables.latest && !tables.latest.ok ? tables.latest.err : ''}</p>
+            <Button size="sm" variant="outline" onClick={() => refetch()}>Retry</Button>
+          </div>
+        </Show>
+
         <Show
-          when={!tables.loading && tables.latest?.length}
+          when={!failed() && !tables.loading && tables.latest?.ok && tables.latest.rows.length}
           fallback={
-            <Show when={!tables.loading} fallback={<TableSkeleton />}>
-              <div class="mt-10 grid place-items-center rounded-card border border-dashed border-black/15 bg-surface px-6 py-16 text-center">
-                <p class="font-medium text-fg">No tables yet</p>
-                <p class="mt-1 text-sm text-fg-muted">Deal yourself in — create the first table.</p>
-              </div>
+            <Show when={!failed()} fallback={null}>
+              <Show when={!tables.loading} fallback={<TableSkeleton />}>
+                <div class="mt-10 grid place-items-center rounded-card border border-dashed border-black/15 bg-surface px-6 py-16 text-center">
+                  <p class="font-medium text-fg">No tables yet</p>
+                  <p class="mt-1 text-sm text-fg-muted">Deal yourself in — create the first table.</p>
+                </div>
+              </Show>
             </Show>
           }
         >
           <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <For each={tables.latest}>
-              {(t) => <TableCard table={t}  onJoin={() => onJoin(t)} />}
+            <For each={tables.latest?.ok ? tables.latest.rows : []}>
+              {(t) => <TableCard table={t} onJoin={() => onJoin(t)} />}
             </For>
           </div>
         </Show>
       </main>
+
+      {/* feedback (ASPTR-192) */}
+      <footer class="flex justify-center border-t border-line/60 py-3">
+        <FeedbackDialog />
+      </footer>
     </div>
   )
 }

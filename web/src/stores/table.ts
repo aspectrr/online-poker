@@ -332,20 +332,6 @@ function createTableStore(tableId: string): TableStore {
         })
         break
       }
-      case 'pot_awarded':
-        setState((s) => {
-          const w = e.winners ?? []
-          const first = w[0]
-          const boardLabel = s.isDoubleBoard ? ` on board ${String.fromCharCode(65 + (first?.board_index ?? 0))}` : ''
-          return {
-            ...s,
-            message: first
-              ? `${s.seats[first.seat]?.player ?? 'seat ' + first.seat} wins ${money(w.reduce((a, x) => a + x.amount, 0))}${first.hand_name ? ` — ${first.hand_name}` : ''}${boardLabel}`
-              : s.message,
-            seats: s.seats.map((x) => (w.some((y) => y.seat === x.seat) ? { ...x, isWinner: true } : x)),
-          }
-        })
-        break
       case 'seven_deuce_bounty':
         toast(`${e.player ?? 'someone'} wins ${money(e.amount ?? 0)} bounty w/ 7-2!`, 'gold')
         break

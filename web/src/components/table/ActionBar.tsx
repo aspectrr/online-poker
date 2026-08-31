@@ -158,8 +158,9 @@ export function ActionBar(props: {
               </span>
             </div>
 
-            {/* slider + typed input */}
-            <div class={cn('grid gap-3 transition-all', raising() ? 'opacity-100' : 'opacity-40 pointer-events-none', 'sm:grid-cols-[1fr_150px]')}>
+            {/* slider + typed input — shown while raising (saves vertical space in landscape) */}
+            <Show when={raising()}>
+            <div class="grid gap-3 sm:grid-cols-[1fr_150px]">
               <div>
                 <Slider
                   value={[raiseTo()]}
@@ -199,20 +200,22 @@ export function ActionBar(props: {
                 </span>
               </div>
             </div>
+            </Show>
           </Show>
 
           {/* main buttons */}
           <div class="flex gap-2.5">
-            <Button variant="danger" size="lg" class="flex-1" disabled={!legal()!.canFold}
+            <Button variant="danger" size="lg" class="flex-1 [@media(max-height:520px)]:h-9 [@media(max-height:520px)]:px-3 [@media(max-height:520px)]:text-sm"
+              disabled={!legal()!.canFold}
               onClick={() => props.send({ kind: 'fold' })}>
               Fold <kbd class="ml-1 rounded bg-black/25 px-1 text-[10px]">F</kbd>
             </Button>
-            <Button variant="outline" size="lg" class="flex-[1.4]"
+            <Button variant="outline" size="lg" class="flex-[1.4] [@media(max-height:520px)]:h-9 [@media(max-height:520px)]:px-3 [@media(max-height:520px)]:text-sm"
               onClick={() => (primary() ? props.send(primary()!.action) : undefined)}>
               {primary()?.label} <kbd class="ml-1 rounded bg-black/25 px-1 text-[10px]">C</kbd>
             </Button>
             <Show when={legal()!.canRaise}>
-              <Button size="lg" class="flex-[1.4]"
+              <Button size="lg" class="flex-[1.4] [@media(max-height:520px)]:h-9 [@media(max-height:520px)]:px-3 [@media(max-height:520px)]:text-sm"
                 onClick={commitRaise}>
                 {legal()!.maxRaiseToCents === (typing() ? parseBetToCents(typed()) : raiseTo())
                   ? 'All-in'
@@ -220,6 +223,15 @@ export function ActionBar(props: {
                 <kbd class="ml-1 rounded bg-black/30 px-1 text-[10px]">R</kbd>
               </Button>
             </Show>
+          </div>
+
+          {/* keyboard shortcuts hint (ASPTR-193d) */}
+          <div class="hidden flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[10px] text-fg-muted [@media(max-height:520px)]:hidden sm:flex">
+            <span><kbd class="rounded border border-line bg-surface-raised px-1 font-sans">F</kbd> fold</span>
+            <span><kbd class="rounded border border-line bg-surface-raised px-1 font-sans">C</kbd> check/call</span>
+            <Show when={legal()!.canRaise}><span><kbd class="rounded border border-line bg-surface-raised px-1 font-sans">R</kbd> raise</span></Show>
+            <span><kbd class="rounded border border-line bg-surface-raised px-1 font-sans">↵</kbd> confirm</span>
+            <Show when={legal()!.canRaise}><span><kbd class="rounded border border-line bg-surface-raised px-1 font-sans">esc</kbd> cancel</span></Show>
           </div>
         </div>
       </div>

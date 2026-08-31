@@ -577,3 +577,30 @@ Placeholder gotcha: `DATABASE_URL` must be *parseable* by pgx even as a placehol
 - Render service not created (dashboard clicks; blueprint + env-var table ready).
 - Custom domain — nobody asked for one yet.
 - `ALLOWED_ORIGIN` stays `*` until Collin sets the render URL (fine for an open API with token-gated auth).
+
+---
+
+# BUILD_NOTES — ASPTR-192/193: Feedback widget + polish sweep (web/)
+
+## ASPTR-192 — Feedback widget → aspectrr-feedback
+
+- **`lib/feedback.ts`** — `submitFeedback({message, rating?, severity})`: POST `/token` → `{token}`, then POST `/feedback` with `x-feedback-token`, body `{source:'online-poker', message, rating?, severity}` → `{id}`. Host = `VITE_FEEDBACK_URL` env, default `https://aspectrr-feedback.fly.dev`.
+- **`components/FeedbackDialog.tsx`** — footer "Feedback" text button (existing Dialog): textarea, optional 1-5 star rating (marigold stars, click selected star to clear), severity Select (info/suggestion/bug). Send disabled until message; success → dialog closes + toast **"Thanks - noted."** (3.5s, bottom-center); failure → inline red error under the form. No new deps.
+- Wired into lobby footer (centered, below main) and table footer (bottom-right, beside the action bar).
+- **Live verification:** curl submit → `{"id":41}`; UI submit (dialog → Send) through to the live server → `POST /feedback` 201 `{"id":42}` + toast observed. Bad token → `{"error":"invalid or expired token"}`.
+- **⚠️ BLOCKER for deployed web: the feedback server sends no CORS headers** (OPTIONS → 404, no `Access-Control-Allow-Origin`), so browser fetches from any origin fail (`Failed to fetch` — the inline error path shown live). curl works; browsers won't. Server-side fix needed (add CORS middleware to the aspectrr-feedback service; its source isn't on this machine — `~/orca/workspaces/feedback-server/` is an empty trashed worktree). For the UI E2E above I ran a 25-line local CORS pass-through (`bun /tmp/feedback-proxy.ts`, vite started with `VITE_FEEDBACK_URL=http://localhost:8099`) forwarding to the live server — UI code path is exactly what ships; only the transport origin differed.
+
+## ASPTR-193 — polish sweep
+
+- **(a) Mobile landscape (table page):** the felt is now a fixed 1024×640 design box (16/10, `DESIGN_W/H` in `Table.tsx`) scaled as one unit to fit the available area (`scale = min(w/1024, h/(640+84))`), so seats/board/cards shrink proportionally instead of overlapping — the +84 design px budgets the bottom-center (hero) seat's overhang past the felt box so the action bar never covers it (was reproducible at 1280×713 before the fix). Compact classes at `max-height:520px`: header 40px, action-bar buttons h-9/text-sm, tighter footer. Raise slider block now only renders while raising (`Show when={raising()}` — saves ~70px everywhere, no desktop loss: presets/R key/arrow keys still set raise mode). Verified in-browser with a real 844×390 viewport iframe: seats overlap-free, hero cards visible, action bar reachable (idle 50px, active ≈110px).
+- **(b) Reconnect banner:** table store already auto-reconnects (exp backoff); `Table.tsx` now surfaces it — `everOpen` computed suppresses the initial `connecting` flash; banner (gold pill, pinging dot, "Connection lost — reconnecting…" / "Reconnecting…") shows while closed or reconnecting-after-drop. Live-tested: killed `go run` server mid-hand → banner appeared; restarted → cleared ~2.5s after server back, seat re-adopted.
+- **(c) Lobby error state:** REST failure now renders "Couldn't load tables / <error> / Retry" (danger-tinted card). Root-cause fix alongside: **`createResource(listTables)` never settles when the fetcher rejects under the router** (rejection escapes as "Uncaught (in promise)", lobby stuck on skeletons forever — pre-existing, reproducible against a 401). Fetcher now catches and returns `{ok:true,rows}|{ok:false,err}` so the resource always settles; subtitle shows "Tables unavailable" on failure. Verified: server 401 (no token) → error card + working Retry; `?dev=` identity → 200 → live table card renders.
+- **(d) Keyboard hint row** in the active action bar: `F fold · C check/call · R raise · ↵ confirm · esc cancel` (hidden on mobile and at max-height:520px). Verified `c` key sends check/call via CDP keypress during a live hand.
+- **(e) Sign-out in nav:** lobby header shows "Sign out" (text variant) when a Supabase session exists, else "Sign in" — `supabase().auth.getSession()` on mount, `signOut()` clears state. Dev runs without Supabase env so the authed state wasn't visually verifiable here (only Sign-in path shown); logic is 6 lines, review that.
+- **(f) Visual fixes found & fixed:** dead `felt-bg` class on the table page root (deleted from CSS in the ASPTR-196 retheme) removed; **duplicate unreachable `case 'pot_awarded'`** in `stores/table.ts` (second copy dropped the `boardWins` update — first one kept); stray double-space in Lobby `TableCard` JSX. /auth + /cards checked — clean on the Notion retheme.
+
+## Verification
+
+- `tsc -b && vite build` green (266.0kB js / 50.5kB css, gz 83.8kB + 9.3kB). `bun src/lib/betting.check.ts` green. `server/` untouched.
+- Browser pass (chrome-devtools against `DEV_AUTH=1 go run` + vite, 3 players alice/bob/carol): lobby skeleton → error card → authed grid; feedback dialog open/fill/stars/severity/send → toast (live submit id 42); live hand — blinds, presets, active bar + hint row, `c` key action, timeout fold, "bob wins $0.30"; post-hand rabbit prompt renders; reconnect banner both directions; desktop 1280×713 + landscape 844×390 layout rects measured overlap-free; console clean except deliberate-downtime WS failures.
+- Orca embedded browser screenshots returned empty this session (same flakiness as ASPTR-187/190) — visual pass done via chrome-devtools instead.
