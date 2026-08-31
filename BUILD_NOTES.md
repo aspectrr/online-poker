@@ -506,3 +506,33 @@ All in `web/` + transport-layer `server/` (engine untouched except two additive 
 - Bomb-pot trigger banner needs a trigger match (server-side); manual arm covers deterministic demos. `bomb_pot_next` in a snapshot carries no card (banner without card) until the armed event arrives.
 - Trigger-mode live demo still not captured (dev-table queens are chance-based); manual path fully verified. Trigger wiring is unit-tested.
 - Post-hand prompt approximations from ASPTR-199 (winner-seat inference) unchanged.
+
+---
+
+# BUILD_NOTES — ASPTR-191: Deploy (Fly live, Render + Supabase staged)
+
+## Shipped
+
+- **Fly app `online-poker-server` LIVE** — https://online-poker-server.fly.dev/healthz → `ok` (200). Region iad, shared-cpu-1x/256MB, machine sleeps when idle (`auto_stop_machines="stop"`), wakes on request; WS holds it up during play. Fly checks: GET /healthz every 15s, passing.
+- **`server/Dockerfile`** — multi-stage `golang:1-alpine` (CGO_ENABLED=0, -trimpath -s -w) → `gcr.io/distroless/static-debian12:nonroot`. 4.9MB image. HEALTHCHECK can't shell out on distroless → binary got a `-healthcheck` flag (GETs 127.0.0.1:$PORT/healthz, exit 0/1) — same binary probes itself.
+- **`server/fly.toml`** — lives in `server/` because fly builds from CWD (dockerfile + build context). Deploy: `cd server && fly deploy`.
+- **`web/render.yaml`** — blueprint for static SPA (rootDir web, bun build, dist, SPA rewrite `/* → /index.html`). Render only auto-reads render.yaml at repo root → DEPLOY.md has manual dashboard settings as the primary path.
+- **`DEPLOY.md`** — current state + exact fill-in steps (secrets, supabase create/push, render service, ALLOWED_ORIGIN).
+- **CORS/origin env** — `ALLOWED_ORIGIN` (default `*`): drives `Access-Control-Allow-Origin` in `cors()` AND extra WS `OriginPatterns` (was hardcoded localhost-only — deployed render frontend WS would've been rejected). Variadic param on `ws.Upgrade`, no call-site churn. Tests: `main_test.go` (origin echo + preflight 204).
+- Flyctl in agent shells can't see the keychain token → `export FLY_API_TOKEN=$(awk '/^access_token:/{print $2; exit}' ~/.fly/config.yml)`.
+
+## Bug found deploying: nil context panic
+
+`store.New(nil, dbURL)` in main.go — pgxpool spawns a health-check goroutine calling `context.WithCancel(nil)` → panic exit 2, machine crash-looped, health check never passed. Local docker run with the same placeholder envs reproduced it in one shot. Fix: `context.Background()`. (Hidden until now because dev had no DATABASE_URL.)
+
+Placeholder gotcha: `DATABASE_URL` must be *parseable* by pgx even as a placeholder (`postgres://placeholder:placeholder@127.0.0.1:5432/placeholder` — pool is lazy, boots fine); a bare word fatals at startup. Server tolerates that until real secrets land.
+
+## Supabase prod — blocked
+
+`supabase projects create online-poker` failed: free org at **2-project limit** (`llm-gateway`, `madcactus-dashboard`). Needs Collin to pause/delete one or upgrade. Exact commands in DEPLOY.md (create → link → `supabase db push` for 0001+0002). Secrets currently placeholders; server runs, DB endpoints 5xx until real values.
+
+## Not done / next
+
+- Render service not created (dashboard clicks; blueprint + env-var table ready).
+- Custom domain — nobody asked for one yet.
+- `ALLOWED_ORIGIN` stays `*` until Collin sets the render URL (fine for an open API with token-gated auth).
