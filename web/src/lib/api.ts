@@ -90,7 +90,7 @@ function rowToSummary(r: Record<string, unknown>): TableSummary {
 
 const rankWire = (rank: string): number | null =>
   rank === "any" ? null : "23456789TJQKA".indexOf(rank) + 2;
-const suitWire = (suit: string): number | null => (suit === "any" ? null : "shdc".indexOf(suit));
+const suitWire = (suit: string): number => "shdc".indexOf(suit);
 
 /** UI config -> server store.TableConfig jsonb (snake_case, ranks 2-14). */
 function configToWire(c: TableConfig): Record<string, unknown> {
@@ -103,12 +103,13 @@ function configToWire(c: TableConfig): Record<string, unknown> {
     rabbit_hunt: c.rabbitHunt,
     bomb_pot_mode: c.bombPotMode === "every_hand" ? "manual" : c.bombPotMode,
     bomb_pot_triggers:
-      c.bombPotMode === "trigger" &&
-      c.bombPotTrigger &&
-      (c.bombPotTrigger.rank !== "any" || c.bombPotTrigger.suit !== "any")
-        ? [{ rank: rankWire(c.bombPotTrigger.rank), suit: suitWire(c.bombPotTrigger.suit) }].filter(
-            (t) => t.rank != null,
-          )
+      c.bombPotMode === "trigger" && c.bombPotTrigger && rankWire(c.bombPotTrigger.rank) != null
+        ? c.bombPotTrigger.suits.length
+          ? c.bombPotTrigger.suits.map((s) => ({
+              rank: rankWire(c.bombPotTrigger!.rank),
+              suit: suitWire(s),
+            }))
+          : [{ rank: rankWire(c.bombPotTrigger.rank) }]
         : [],
     seven_deuce: c.sevenTwo,
     seven_deuce_bounty: c.sevenTwoBountyCents,

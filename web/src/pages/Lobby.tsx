@@ -28,11 +28,13 @@ export function LobbyPage() {
 
   // auth state for the nav (ASPTR-193e): sign out when a supabase session exists
   const [authed, setAuthed] = createSignal(false);
+  const [email, setEmail] = createSignal("");
   onMount(async () => {
     const sb = supabase();
     if (!sb) return;
     const { data } = await sb.auth.getSession();
     setAuthed(!!data.session);
+    setEmail(data.session?.user.email ?? "");
   });
   const signOut = async () => {
     await supabase()?.auth.signOut();
@@ -51,7 +53,7 @@ export function LobbyPage() {
             <span class="grid size-8 place-items-center rounded-btn bg-accent-tint text-accent">
               <Logo class="size-5" />
             </span>
-            <span class="font-display text-base font-bold tracking-tight text-fg">riverrats</span>
+            <span class="font-display text-base font-bold tracking-tight text-fg">River Rats</span>
           </A>
           <div class="flex items-center gap-3">
             <Show when={MOCK_MODE}>
@@ -59,19 +61,23 @@ export function LobbyPage() {
                 mock data
               </span>
             </Show>
-            <Show
-              when={authed()}
-              fallback={
-                <A href="/auth">
-                  <Button variant="outline" size="sm">
-                    Sign in
-                  </Button>
-                </A>
-              }
-            >
+            <Show when={authed()}>
+              <span
+                class="hidden max-w-44 truncate rounded-pill border border-line bg-surface px-2.5 py-0.5 text-xs text-fg-muted sm:inline"
+                title={email()}
+              >
+                {email()}
+              </span>
               <Button variant="text" size="sm" onClick={signOut}>
                 Sign out
               </Button>
+            </Show>
+            <Show when={!authed()}>
+              <A href="/auth">
+                <Button variant="outline" size="sm">
+                  Sign in
+                </Button>
+              </A>
             </Show>
           </div>
         </div>

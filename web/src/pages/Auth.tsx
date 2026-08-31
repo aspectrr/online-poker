@@ -19,7 +19,7 @@ export function AuthPage() {
     setError(null);
     const { error: err } = await client.auth.signInWithOtp({
       email: email().trim(),
-      options: { shouldCreateUser: true },
+      options: { shouldCreateUser: true, emailRedirectTo: window.location.origin },
     });
     setSending(false);
     if (err) setError(err.message);
@@ -33,7 +33,7 @@ export function AuthPage() {
           <span class="grid size-9 place-items-center rounded-btn bg-accent-tint text-accent">
             <Logo class="size-5" />
           </span>
-          <span class="font-display text-lg font-bold tracking-tight text-fg">riverrats</span>
+          <span class="font-display text-lg font-bold tracking-tight text-fg">River Rats</span>
         </A>
 
         <div class="rounded-card border border-line bg-surface p-6">

@@ -2,10 +2,10 @@ export type GameType = "NLHE" | "PLO4";
 
 export type BombPotMode = "off" | "every_hand" | "trigger";
 
-/** A card rank+suit condition that arms the bomb pot for the next hand. */
+/** A bomb-pot condition: rank plus one or more suits (empty = any suit). */
 export type BombPotTrigger = {
-  rank: string; // 'A'..'K' or 'any'
-  suit: string; // 's'|'h'|'d'|'c' or 'any'
+  rank: string; // 'A'..'2'
+  suits: string[]; // subset of 'shdc'; [] = any suit
 };
 
 export type TableConfig = {

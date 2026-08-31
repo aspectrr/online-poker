@@ -4,6 +4,9 @@ package auth
 
 import (
 	"context"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
@@ -33,16 +36,17 @@ func UserID(ctx context.Context) string {
 // Validator validates Supabase access tokens.
 type Validator struct {
 	jwksURL   string
-	audience  string
+	audience  string // anon key — accepted alongside Supabase's "authenticated"
 	issuer    string
-	keys      map[string]*rsa.PublicKey
+	keys      map[string]crypto.PublicKey
 	mu        sync.RWMutex
 	fetchedAt time.Time
 	client    *http.Client
 }
 
 // New builds a Validator from SUPABASE_URL and SUPABASE_ANON_KEY.
-// Tokens are expected to carry issuer SUPABASE_URL/auth/v1 and the anon key as audience.
+// Tokens are expected to carry issuer SUPABASE_URL/auth/v1 and an audience of
+// either "authenticated" (JWT signing keys) or the anon key (legacy).
 func New(supabaseURL, anonKey string) (*Validator, error) {
 	u, err := url.Parse(strings.TrimRight(supabaseURL, "/"))
 	if err != nil {
@@ -52,13 +56,13 @@ func New(supabaseURL, anonKey string) (*Validator, error) {
 		jwksURL:  u.String() + "/auth/v1/.well-known/jwks.json",
 		audience: anonKey,
 		issuer:   u.String() + "/auth/v1",
-		keys:     map[string]*rsa.PublicKey{},
+		keys:     map[string]crypto.PublicKey{},
 		client:   &http.Client{Timeout: 10 * time.Second},
 	}, nil
 }
 
-// key returns the RSA public key for a kid, refreshing the JWKS once on miss.
-func (v *Validator) key(kid string) (*rsa.PublicKey, error) {
+// key returns the public key for a kid, refreshing the JWKS once on miss.
+func (v *Validator) key(kid string) (crypto.PublicKey, error) {
 	v.mu.RLock()
 	key, ok := v.keys[kid]
 	age := time.Since(v.fetchedAt)
@@ -96,28 +100,50 @@ func (v *Validator) refresh() error {
 	var jwks struct {
 		Keys []struct {
 			Kid string `json:"kid"`
+			Kty string `json:"kty"`
+			Crv string `json:"crv"`
 			N   string `json:"n"`
 			E   string `json:"e"`
+			X   string `json:"x"`
+			Y   string `json:"y"`
 		} `json:"keys"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&jwks); err != nil {
 		return fmt.Errorf("auth: decode JWKS: %w", err)
 	}
-	keys := make(map[string]*rsa.PublicKey, len(jwks.Keys))
+	keys := make(map[string]crypto.PublicKey, len(jwks.Keys))
 	for _, k := range jwks.Keys {
-		n, err := decodeBase64URL(k.N)
-		if err != nil {
-			return fmt.Errorf("auth: JWKS kid %s modulus: %w", k.Kid, err)
+		switch k.Kty {
+		case "RSA":
+			n, err := decodeBase64URL(k.N)
+			if err != nil {
+				return fmt.Errorf("auth: JWKS kid %s modulus: %w", k.Kid, err)
+			}
+			e, err := decodeBase64URL(k.E)
+			if err != nil {
+				return fmt.Errorf("auth: JWKS kid %s exponent: %w", k.Kid, err)
+			}
+			exp := 0
+			for _, b := range e {
+				exp = exp<<8 | int(b)
+			}
+			keys[k.Kid] = &rsa.PublicKey{N: new(big.Int).SetBytes(n), E: exp}
+		case "EC":
+			if k.Crv != "P-256" {
+				return fmt.Errorf("auth: JWKS kid %s: unsupported curve %q", k.Kid, k.Crv)
+			}
+			x, err := decodeBase64URL(k.X)
+			if err != nil {
+				return fmt.Errorf("auth: JWKS kid %s x coord: %w", k.Kid, err)
+			}
+			y, err := decodeBase64URL(k.Y)
+			if err != nil {
+				return fmt.Errorf("auth: JWKS kid %s y coord: %w", k.Kid, err)
+			}
+			keys[k.Kid] = &ecdsa.PublicKey{Curve: elliptic.P256(), X: new(big.Int).SetBytes(x), Y: new(big.Int).SetBytes(y)}
+		default:
+			return fmt.Errorf("auth: JWKS kid %s: unsupported key type %q", k.Kid, k.Kty)
 		}
-		e, err := decodeBase64URL(k.E)
-		if err != nil {
-			return fmt.Errorf("auth: JWKS kid %s exponent: %w", k.Kid, err)
-		}
-		exp := 0
-		for _, b := range e {
-			exp = exp<<8 | int(b)
-		}
-		keys[k.Kid] = &rsa.PublicKey{N: new(big.Int).SetBytes(n), E: exp}
 	}
 	if len(keys) == 0 {
 		return errors.New("auth: JWKS contains no keys")
@@ -150,11 +176,17 @@ func (v *Validator) Validate(tokenStr string) (string, error) {
 	}
 	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
 		return key, nil
-	}, jwt.WithValidMethods([]string{"RS256"}),
-		jwt.WithAudience(v.audience), jwt.WithIssuer(v.issuer),
+	}, jwt.WithValidMethods([]string{"RS256", "ES256"}),
+		jwt.WithIssuer(v.issuer),
 		jwt.WithExpirationRequired(), jwt.WithLeeway(60*time.Second))
 	if err != nil {
 		return "", fmt.Errorf("auth: validate token: %w", err)
+	}
+	// New Supabase projects sign tokens with aud "authenticated"; legacy ones
+	// used the anon key. Anything else is not ours.
+	aud, _ := token.Claims.GetAudience()
+	if len(aud) != 1 || (aud[0] != "authenticated" && aud[0] != v.audience) {
+		return "", fmt.Errorf("auth: unexpected audience %v", aud)
 	}
 	if !token.Valid {
 		return "", errors.New("auth: invalid token")

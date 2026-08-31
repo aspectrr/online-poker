@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <!-- RiverRats mark: rat over a river wave, on the brand accent -->
-  <rect width="24" height="24" rx="5.5" fill="#0075de"/>
-  <g fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- RiverRats mark: matches header logo (tint bg, accent stroke) -->
+  <rect width="24" height="24" rx="5.5" fill="#e6f3fe"/>
+  <g fill="none" stroke="#0075de" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="7.8" cy="6.8" r="2.9"/>
     <circle cx="16.2" cy="6.8" r="2.9"/>
     <path d="M5 8.6C4.7 13 6.6 16.8 12 18.6c5.4-1.8 7.3-5.6 7-10"/>
