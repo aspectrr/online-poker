@@ -145,9 +145,3 @@ export function fetchHands(tableId: string, limit = 50): Promise<HandRow[]> {
   if (MOCK_MODE) return Promise.resolve([]);
   return req<HandRow[]>(`/api/tables/${encodeURIComponent(tableId)}/hands?limit=${limit}`);
 }
-
-/** ponytail: join is a stub until the table view route exists; wire to WS seat-take later. */
-export function joinTable(id: string): Promise<{ ok: true }> {
-  if (MOCK_MODE) return Promise.resolve({ ok: true });
-  return req<{ ok: true }>(`/tables/${id}/join`, { method: "POST" });
-}

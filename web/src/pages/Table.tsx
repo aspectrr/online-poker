@@ -1,9 +1,19 @@
-import { createSignal, createComputed, For, onCleanup, onMount, Show } from "solid-js";
+import {
+  createSignal,
+  createComputed,
+  createEffect,
+  For,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+} from "solid-js";
 import { useParams, A, useLocation } from "@solidjs/router";
-import { provideTable } from "../stores/table";
+import { provideTable, BUTTON_TRAVEL_MS } from "../stores/table";
 import { createDemoTable } from "../stores/demoTable";
 import type { TableStore, UICard } from "../lib/protocol";
 import { Seat } from "../components/table/Seat";
+import { JoinModal } from "../components/table/JoinModal";
 import { TableCenter } from "../components/table/TableCenter";
 import { ActionBar } from "../components/table/ActionBar";
 import { SettingsDrawer } from "../components/table/SettingsDrawer";
@@ -145,6 +155,28 @@ export function TablePage() {
   const [drawerOpen, setDrawerOpen] = createSignal(false);
   const [historyOpen, setHistoryOpen] = createSignal(false);
 
+  // share link: copy this table's URL (minus dev params) to the clipboard
+  const [copied, setCopied] = createSignal(false);
+  const shareLink = () => {
+    const u = new URL(window.location.href);
+    u.searchParams.delete("dev");
+    u.searchParams.delete("deal");
+    navigator.clipboard.writeText(u.toString()).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  // join modal: shows while connected + unseated; "just watching" dismisses,
+  // clicking an empty seat reopens it with that seat preselected
+  const [spectating, setSpectating] = createSignal(false);
+  const [presetSeat, setPresetSeat] = createSignal<number | undefined>(undefined);
+  const joinOpen = () => store.status === "open" && t().heroSeat < 0 && !spectating();
+  const openJoinAt = (seat: number) => {
+    setPresetSeat(seat);
+    setSpectating(false);
+  };
+
   // reconnect banner (ASPTR-193): surface ws drops; suppress the initial connecting flash
   const [everOpen, setEverOpen] = createSignal(false);
   createComputed(() => {
@@ -178,6 +210,44 @@ export function TablePage() {
             </Show>
             {t().street}
           </span>
+          <button
+            type="button"
+            title={copied() ? "Link copied!" : "Copy invite link"}
+            aria-label="Copy invite link"
+            class="grid size-7 place-items-center rounded-lg text-fg-muted transition-colors hover:bg-surface-raised hover:text-fg"
+            onClick={shareLink}
+          >
+            <Show
+              when={copied()}
+              fallback={
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  class="size-4"
+                  aria-hidden="true"
+                >
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                </svg>
+              }
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="size-4 text-accent"
+                aria-hidden="true"
+              >
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            </Show>
+          </button>
           <button
             type="button"
             title="Hand history"
@@ -308,12 +378,18 @@ export function TablePage() {
                       dealt={t().dealt[seat.seat] ?? 0}
                       dealDx={(0.5 - fx) * DESIGN_W}
                       dealDy={(0.5 - fy) * DESIGN_H}
-                      onJoin={canJoin() ? () => store.joinSeat(seat.seat) : undefined}
+                      landing={t().landingSeat === seat.seat}
+                      onJoin={canJoin() ? () => openJoinAt(seat.seat) : undefined}
                       style={`left:${fx * 100}%; top:${fy * 100}%`}
                     />
                   );
                 }}
               </For>
+
+              {/* dealer button: glides seat-to-seat around the rail */}
+              <Show when={t().buttonSeat >= 0}>
+                <DealerButton seat={t().buttonSeat} positions={positions()} />
+              </Show>
 
               {/* chips flying to winner */}
               <For each={winners()}>
@@ -379,6 +455,67 @@ export function TablePage() {
         tableId={params.id ?? "dev-table"}
         onClose={() => setHistoryOpen(false)}
       />
+
+      {/* pre-seat modal: name (guests) + buy-in + seat picker */}
+      <Show when={joinOpen()} keyed>
+        <JoinModal
+          open
+          seats={t().seats}
+          bbCents={t().bbCents}
+          me={store.me}
+          error={store.lastError}
+          initialSeat={presetSeat()}
+          onJoin={(seat, name, stack) => store.joinSeat(seat, name, stack)}
+          onClose={() => setSpectating(true)}
+        />
+      </Show>
+    </div>
+  );
+}
+
+/**
+ * Flying dealer button: glides seat-to-seat around the rail when the button
+ * moves (hand_started carries the new seat; dealing waits for the travel).
+ * Positioned in design-box px so it scales with the felt.
+ */
+function DealerButton(props: { seat: number; positions: [number, number][] }) {
+  // eslint-disable-next-line no-unassigned-vars -- Solid ref capture assigns this
+  let el!: HTMLDivElement;
+  const pos = () => props.positions[props.seat] ?? [0.5, 0.5];
+  // parked just below the nameplate (seat column is ~110px tall, centered)
+  const at = ([fx, fy]: [number, number]) =>
+    `translate(${fx * DESIGN_W}px, ${fy * DESIGN_H + 44}px) translate(-50%, -50%)`;
+
+  createEffect(
+    on(
+      () => props.seat,
+      (seat, prev) => {
+        if (prev == null || prev < 0 || prev === seat) return;
+        const from = props.positions[prev] ?? [0.5, 0.5];
+        const to = pos();
+        // bow the midpoint outward so the chip rides the rail, not the pot
+        const dx = (from[0] + to[0]) / 2 - 0.5;
+        const dy = (from[1] + to[1]) / 2 - 0.5;
+        const len = Math.hypot(dx, dy);
+        const bow: [number, number] =
+          len < 0.04 ? to : [0.5 + (dx / len) * 0.46, 0.5 + (dy / len) * 0.4];
+        el.animate([{ transform: at(from) }, { transform: at(bow) }, { transform: at(to) }], {
+          duration: BUTTON_TRAVEL_MS,
+          easing: "cubic-bezier(0.45, 0, 0.2, 1)",
+        });
+      },
+      { defer: true },
+    ),
+  );
+
+  return (
+    <div
+      ref={el}
+      class="pointer-events-none absolute left-0 top-0 z-10 grid size-6 place-items-center rounded-full bg-white text-[11px] font-bold text-black shadow-md shadow-black/50"
+      style={{ transform: at(pos()) }}
+      title="Dealer button"
+    >
+      D
     </div>
   );
 }

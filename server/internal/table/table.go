@@ -322,12 +322,27 @@ func (t *Table) join(c *ws.Client, m protocol.ClientMsg) {
 	s.userID = uid
 	s.conn = c
 	s.name = sanitizeName(m.Name, uid)
-	s.stack = t.cfg.StartingStackBB * t.cfg.BigBlind
+	s.stack = t.joinStack(m.Stack)
 	s.sittingOut = false
 	s.lastAction = ""
 	t.broadcastSeats()
 	c.TrySend(protocol.ServerMsg{Type: "state", State: t.snapshotFor(m.Seat)})
 	t.maybeScheduleHand()
+}
+
+// joinStack: requested buy-in in cents, clamped to [1bb, 1000bb]; 0/negative = table default.
+func (t *Table) joinStack(requested int64) int64 {
+	def := t.cfg.StartingStackBB * t.cfg.BigBlind
+	if requested <= 0 {
+		return def
+	}
+	if requested < t.cfg.BigBlind {
+		return t.cfg.BigBlind
+	}
+	if max := 1000 * t.cfg.BigBlind; requested > max {
+		return max
+	}
+	return requested
 }
 
 // ---- bomb-pot arming / dev forced deals ----
