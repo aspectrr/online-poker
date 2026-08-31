@@ -1,4 +1,4 @@
-import { createSignal, For, onCleanup, onMount, Show } from 'solid-js'
+import { createSignal, createComputed, For, onCleanup, onMount, Show } from 'solid-js'
 import { useParams, A, useLocation } from '@solidjs/router'
 import { provideTable } from '../stores/table'
 import { createDemoTable } from '../stores/demoTable'
@@ -8,11 +8,18 @@ import { TableCenter } from '../components/table/TableCenter'
 import { ActionBar } from '../components/table/ActionBar'
 import { SettingsDrawer } from '../components/table/SettingsDrawer'
 import { HistoryDrawer } from '../components/table/HistoryDrawer'
+import { FeedbackDialog } from '../components/FeedbackDialog'
 import { Card } from '../components/cards/Card'
 import { RabbitMark } from '../components/cards/RabbitMark'
 import { blinds } from '../lib/money'
 
 const API_URL = import.meta.env.VITE_API_URL as string | undefined
+
+/** Felt design box (16/10) — seats/center are laid out at this size, then scaled as one unit (ASPTR-193 landscape pass). */
+const DESIGN_W = 1024
+const DESIGN_H = 640
+/** bottom-center seat (at 95%) overhangs the box by ~half its height — budget it so the action bar never covers the hero */
+const SEAT_OVERHANG = 84
 
 /** Ellipse seat positions (fractions of the felt box) for up to 9 seats. */
 const SEAT_POS: Record<number, [number, number][]> = {
@@ -63,12 +70,14 @@ export function TablePage() {
     return Math.max(0, dl - now())
   }
 
-  // felt box size for deal-flight offsets (center deck -> seat)
-  let feltBox: HTMLDivElement | undefined
-  const [feltSize, setFeltSize] = createSignal({ w: 1024, h: 640 })
+  // felt fit: scale the fixed design box to the available area (seats never overlap on small screens)
+  const [scale, setScale] = createSignal(1)
+  let hostBox: HTMLDivElement | undefined
   onMount(() => {
     const measure = () => {
-      if (feltBox) setFeltSize({ w: feltBox.clientWidth, h: feltBox.clientHeight })
+      if (!hostBox) return
+      const s = Math.min(hostBox.clientWidth / DESIGN_W, hostBox.clientHeight / (DESIGN_H + SEAT_OVERHANG))
+      if (s > 0) setScale(s)
     }
     measure()
     window.addEventListener('resize', measure)
@@ -78,13 +87,18 @@ export function TablePage() {
   const [drawerOpen, setDrawerOpen] = createSignal(false)
   const [historyOpen, setHistoryOpen] = createSignal(false)
 
+  // reconnect banner (ASPTR-193): surface ws drops; suppress the initial connecting flash
+  const [everOpen, setEverOpen] = createSignal(false)
+  createComputed(() => { if (store.status === 'open') setEverOpen(true) })
+  const showReconnect = () => store.status === 'closed' || (store.status === 'connecting' && everOpen())
+
   // chips-to-winner: fly chips from center to winner seat
   const winners = () => t().seats.filter((s) => s.isWinner)
 
   return (
-    <div class="flex h-dvh flex-col overflow-hidden felt-bg">
+    <div class="flex h-dvh flex-col overflow-hidden">
       {/* header */}
-      <header class="flex h-12 flex-none items-center justify-between border-b border-line/60 bg-bg/70 px-4 backdrop-blur-md">
+      <header class="flex h-12 flex-none items-center justify-between border-b border-line/60 bg-bg/70 px-4 backdrop-blur-md [@media(max-height:520px)]:h-10">
         <div class="flex items-center gap-3">
           <A href="/" class="text-sm font-medium text-fg-muted transition-colors hover:text-fg">← lobby</A>
           <span class="font-display text-sm font-bold text-fg">{t().name}</span>
@@ -122,6 +136,21 @@ export function TablePage() {
         </div>
       </header>
 
+      {/* reconnect banner (ASPTR-193): store auto-reconnects; this just surfaces it */}
+      <Show when={showReconnect()}>
+        <div class="absolute inset-x-0 top-12 z-40 flex justify-center [@media(max-height:520px)]:top-10">
+          <div class="animate-in-pop flex items-center gap-2 rounded-full border border-marigold/70 bg-surface/95 px-4 py-1.5 shadow-lg">
+            <span class="relative flex size-2">
+              <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-marigold opacity-75" />
+              <span class="relative inline-flex size-2 rounded-full bg-marigold" />
+            </span>
+            <span class="text-sm font-medium text-fg">
+              {store.status === 'closed' ? 'Connection lost — reconnecting…' : 'Reconnecting…'}
+            </span>
+          </div>
+        </div>
+      </Show>
+
       {/* bomb pot banners: armed-for-next-hand (persistent) + live hand */}
       <Show when={t().bombPot || t().bombPotArmed != null}>
         <div class="pointer-events-none absolute inset-x-0 top-14 z-40 flex justify-center">
@@ -147,9 +176,14 @@ export function TablePage() {
         </div>
       </Show>
 
-      {/* table area */}
+      {/* table area — design box scaled to fit, seats stay overlap-free at any size */}
       <main class="relative flex min-h-0 flex-1 items-center justify-center p-3 sm:p-6">
-        <div ref={feltBox} class="relative aspect-[16/10] max-h-full w-full max-w-5xl">
+        <div ref={hostBox} class="grid h-full w-full place-items-center">
+          <div class="relative" style={{ width: `${DESIGN_W * scale()}px`, height: `${(DESIGN_H + SEAT_OVERHANG) * scale()}px` }}>
+            <div
+              class="absolute left-0 top-0 origin-top-left"
+              style={{ width: `${DESIGN_W}px`, height: `${DESIGN_H}px`, transform: `scale(${scale()})` }}
+            >
           {/* rail */}
           <div class="absolute inset-0 rounded-[999px_/280px] rounded-[50%] border border-[#3a2b1d] bg-gradient-to-b from-[#4a3626] via-[#33241a] to-[#221810] p-[14px] shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7),inset_0_2px_2px_rgba(255,255,255,0.08)]">
             {/* felt */}
@@ -177,8 +211,8 @@ export function TablePage() {
                   frac={fracFor(seat.seat)}
                   isHero={seat.seat === t().heroSeat}
                   dealt={t().dealt[seat.seat] ?? 0}
-                  dealDx={(0.5 - fx) * feltSize().w}
-                  dealDy={(0.5 - fy) * feltSize().h}
+                  dealDx={(0.5 - fx) * DESIGN_W}
+                  dealDy={(0.5 - fy) * DESIGN_H}
                   onJoin={canJoin() ? () => store.joinSeat(seat.seat) : undefined}
                   style={`left:${fx * 100}%; top:${fy * 100}%`}
                 />
@@ -190,12 +224,17 @@ export function TablePage() {
           <For each={winners()}>
             {(w) => <ChipFly toSeat={positions()[w.seat] ?? [0.5, 0.5]} />}
           </For>
+            </div>
+          </div>
         </div>
       </main>
 
-      {/* action bar */}
-      <footer class="flex-none px-3 pb-3 sm:px-6 sm:pb-4">
+      {/* action bar + feedback (ASPTR-192) */}
+      <footer class="relative flex-none px-3 pb-3 sm:px-6 sm:pb-4 [@media(max-height:520px)]:px-2 [@media(max-height:520px)]:pb-2">
         <ActionBar table={t()} send={(a) => store.send(a)} error={store.lastError} />
+        <div class="absolute bottom-1 right-3 sm:right-6">
+          <FeedbackDialog />
+        </div>
       </footer>
 
       {/* toasts (7-2 bounty gold, rabbit hunt mascot) */}
