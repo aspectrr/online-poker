@@ -222,7 +222,7 @@ func main() {
 		writeJSON(w, http.StatusOK, rows)
 	}
 
-	allowedOrigin := env("ALLOWED_ORIGIN", "*")
+	allowedOrigin := strings.TrimSuffix(env("ALLOWED_ORIGIN", "*"), "/") // browsers send Origin without trailing slash
 	// Specific origin also unlocks cross-origin WS upgrades (browsers send
 	// Origin on WS handshakes); "*" keeps dev localhost-only defaults.
 	wsOrigins := []string(nil)
