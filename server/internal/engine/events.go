@@ -68,6 +68,9 @@ type Event struct {
 	Stacks         []FinalStack `json:"stacks,omitempty"`
 	Reason         string       `json:"reason,omitempty"`
 	Uncontested    bool         `json:"uncontested,omitempty"`
+	// ButtonSeat: hand_started only — where the dealer button sits this hand.
+	// Pointer so seat 0 survives omitempty (clients animate the button move).
+	ButtonSeat *int `json:"button_seat,omitempty"`
 }
 
 // LegalActions: what the current actor may do.

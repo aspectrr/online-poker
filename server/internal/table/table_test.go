@@ -294,3 +294,24 @@ func TestDevDealGated(t *testing.T) {
 	}
 	t.Fatal("dev_deal on non-dev table should error")
 }
+
+// TestJoinStack: requested buy-in is honored and clamped; 0 = table default.
+func TestJoinStack(t *testing.T) {
+	tbl := testTable(t, 0, 300) // 50/100 blinds, 100bb default = 10000
+	c := ws.NewTestClient("userS")
+	tbl.Attach(c)
+	waitProcessed(t, tbl)
+
+	if got := tbl.joinStack(0); got != 10000 {
+		t.Fatalf("default stack = %d, want 10000", got)
+	}
+	if got := tbl.joinStack(2500); got != 2500 {
+		t.Fatalf("requested stack = %d, want 2500", got)
+	}
+	if got := tbl.joinStack(50); got != 100 { // below 1bb -> clamped to bb
+		t.Fatalf("sub-bb stack = %d, want 100", got)
+	}
+	if got := tbl.joinStack(999_999_999); got != 100_000 { // above 1000bb -> clamped
+		t.Fatalf("huge stack = %d, want 100000", got)
+	}
+}

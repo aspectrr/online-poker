@@ -162,6 +162,15 @@ function TableSkeleton() {
 function TableCard(props: { table: TableSummary; onJoin: () => void }) {
   const t = () => props.table;
   const full = () => t().seatsFilled >= t().maxSeats;
+  // invite link: copies this table's URL to the clipboard
+  const [copied, setCopied] = createSignal(false);
+  const share = () => {
+    const u = new URL(`/table/${t().id}`, window.location.origin);
+    navigator.clipboard.writeText(u.toString()).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
   return (
     <article class="group flex flex-col rounded-card border border-line bg-surface p-5 transition-[border-color] duration-200 ease-out hover:border-black/20">
       <div class="flex items-start justify-between gap-3">
@@ -208,15 +217,55 @@ function TableCard(props: { table: TableSummary; onJoin: () => void }) {
         </For>
       </div>
 
-      <div class="mt-5 flex items-center justify-between">
+      <div class="mt-5 flex items-center justify-between gap-2">
         <span class="text-sm tabular-nums text-fg-muted">
           {t().seatsFilled}/{t().maxSeats} seated
         </span>
-        <Show when={!full()} fallback={<span class="text-sm font-medium text-danger">Full</span>}>
-          <Button size="sm" variant="default" onClick={props.onJoin}>
-            Join
-          </Button>
-        </Show>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            title={copied() ? "Link copied!" : "Copy invite link"}
+            aria-label="Copy invite link"
+            class="grid size-8 place-items-center rounded-btn border border-line text-fg-muted transition-colors hover:border-black/20 hover:text-fg"
+            onClick={share}
+          >
+            <Show
+              when={copied()}
+              fallback={
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  class="size-4"
+                  aria-hidden="true"
+                >
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                </svg>
+              }
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="size-4 text-accent"
+                aria-hidden="true"
+              >
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            </Show>
+          </button>
+          <Show when={!full()} fallback={<span class="text-sm font-medium text-danger">Full</span>}>
+            <Button size="sm" variant="default" onClick={props.onJoin}>
+              Join
+            </Button>
+          </Show>
+        </div>
       </div>
     </article>
   );

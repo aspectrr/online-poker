@@ -235,3 +235,25 @@ func TestNew_SupabaseURLParsing(t *testing.T) {
 		t.Fatalf("issuer = %q", v.issuer)
 	}
 }
+
+// TestGuestTokens: well-formed guest tokens validate to their uid; junk,
+// wrong length, and non-hex are rejected (Supabase path then fails).
+func TestGuestTokens(t *testing.T) {
+	v, err := New("https://sb.example.com", "anon")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tok := NewGuestToken()
+	uid, err := v.Validate(tok)
+	if err != nil {
+		t.Fatalf("guest token rejected: %v", err)
+	}
+	if !strings.HasPrefix(uid, "guest:") || len(uid) != len("guest:")+32 {
+		t.Fatalf("uid = %q, want guest:<32hex>", uid)
+	}
+	for _, bad := range []string{"guest:short", "guest:zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz", "guest:", "guest"} {
+		if _, ok := guestToken(bad); ok {
+			t.Fatalf("guestToken(%q) accepted", bad)
+		}
+	}
+}

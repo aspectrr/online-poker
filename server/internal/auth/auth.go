@@ -162,6 +162,9 @@ func (v *Validator) Validate(tokenStr string) (string, error) {
 	if uid, ok := devToken(tokenStr); ok {
 		return uid, nil
 	}
+	if uid, ok := guestToken(tokenStr); ok {
+		return uid, nil
+	}
 	tok, _, err := jwt.NewParser().ParseUnverified(tokenStr, &jwt.RegisteredClaims{})
 	if err != nil {
 		return "", fmt.Errorf("auth: parse token: %w", err)

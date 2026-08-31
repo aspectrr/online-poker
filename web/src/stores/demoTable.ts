@@ -87,7 +87,7 @@ function scriptHand(button: number, handNo: number): Step[] {
     { t: "street", street: "river", board: BOARD.slice(0, 5), text: "River: 2♣" },
     v(bb, "raise", "Bet $1.10", { to: 110, think: 1800 }),
     { t: "hero", timeoutSec: 20 },
-    { t: "award", seat: HERO, text: "you win with ace-high flush" },
+    { t: "award", seat: HERO, text: "you win with a royal flush" },
     { t: "end", delay: 3400 },
   ];
 }
@@ -131,6 +131,7 @@ export function createDemoTable(tableId: string): TableStore {
     maxSeats: MAX,
     heroSeat: HERO,
     buttonSeat: 0,
+    landingSeat: -1,
     street: "preflop",
     potCents: 0,
     board: { street: "preflop", boards: [[]] },
@@ -360,6 +361,9 @@ export function createDemoTable(tableId: string): TableStore {
     },
     send,
     joinSeat: () => {}, // demo seats everyone up front
+    get me() {
+      return { name: "you", isGuest: true } as const;
+    },
     armBombPot: () => {},
     devDeal: () => {},
     dispose: clearAll,

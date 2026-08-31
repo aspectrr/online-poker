@@ -10,7 +10,7 @@
     "lint": "oxlint src",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
-    "check": "bun src/lib/betting.check.ts"
+    "check": "bun src/lib/betting.check.ts && bun src/lib/chips.check.ts"
   },
   "dependencies": {
     "@kobalte/core": "^0.13.13",

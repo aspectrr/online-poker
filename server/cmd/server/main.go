@@ -238,6 +238,10 @@ func main() {
 		return validator.Middleware(h)
 	}
 	mux.Handle("POST /api/tables", handle(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(auth.UserID(r.Context()), "guest:") {
+			http.Error(w, "sign in to create tables", http.StatusForbidden)
+			return
+		}
 		if st == nil {
 			postTables(w, r)
 			return
@@ -342,6 +346,12 @@ func main() {
 			t.Attach(c)
 		}
 	})))
+
+	// Guest tokens: anyone can mint one (POST /api/auth/guest) and join via a
+	// shared link; table creation still requires a signed-in Supabase account.
+	mux.HandleFunc("POST /api/auth/guest", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"token": auth.NewGuestToken()})
+	})
 
 	// Health.
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {

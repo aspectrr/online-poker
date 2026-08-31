@@ -165,6 +165,57 @@
   animation: board-win-pulse 1.2s ease-in-out infinite;
 }
 
+/* First-to-act landing: gold ring pops on UTG as the last deal card lands */
+@keyframes landing-pop {
+  0% {
+    box-shadow: 0 0 0 0 rgba(212, 175, 55, 0);
+  }
+  35% {
+    box-shadow:
+      0 0 0 6px rgba(212, 175, 55, 0.5),
+      0 0 28px 6px rgba(212, 175, 55, 0.35);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(212, 175, 55, 0);
+  }
+}
+.animate-landing {
+  animation: landing-pop 1.3s cubic-bezier(0.22, 1, 0.36, 1) 1;
+}
+
+/* Peek: hero cards lift toward you while held (protecting your hand) */
+@keyframes peek-lift {
+  from {
+    transform: translateY(0) scale(1) rotate(0deg);
+  }
+  to {
+    transform: translateY(-10px) scale(1.1) rotate(-2deg);
+  }
+}
+.animate-peek {
+  animation: peek-lift 180ms cubic-bezier(0.22, 1, 0.3, 1) forwards;
+  filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.45));
+}
+
+/* Bet placement: a chip flies from the player's stack to the bet ring.
+   --bet-x/--bet-y = stack→ring delta (set inline per seat). */
+@keyframes bet-fly {
+  from {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  to {
+    transform: translate(calc(-50% + var(--bet-x, 0px)), calc(-50% + var(--bet-y, 0px))) scale(0.85);
+    opacity: 0;
+  }
+}
+.animate-bet-fly {
+  animation: bet-fly 600ms cubic-bezier(0.3, 0.7, 0.4, 1) forwards;
+}
+
 /* Gold celebratory toast pop (7-2 bounty) */
 @keyframes toast-gold {
   0% {

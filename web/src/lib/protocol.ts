@@ -103,6 +103,7 @@ export type GameEvent = {
     pot_index?: number;
   }[];
   hole_cards?: { seat: number; cards: Card[] }[];
+  button_seat?: number; // hand_started: dealer button seat this hand
   rabbit?: Card[];
   stacks?: { seat: number; player: string; stack: number }[];
   reason?: string;
@@ -115,7 +116,7 @@ export type PostHandPrompt = { seat: number; bounty: boolean; rabbit: boolean };
 
 /** Client -> server message. */
 export type ClientMsg =
-  | { type: "join"; seat: number; name?: string }
+  | { type: "join"; seat: number; name?: string; stack?: number }
   | { type: "leave" }
   | { type: "action"; kind: "fold" | "check" | "call" | "bet"; amount?: number }
   | { type: "chat"; text: string }
@@ -256,6 +257,8 @@ export type TableState = {
   maxSeats: number;
   heroSeat: number; // -1 = spectator
   buttonSeat: number;
+  /** seat the "first to act" pulse lands on after the opening deal */
+  landingSeat: number;
   street: Street;
   potCents: number; // total in pot incl. street bets
   board: BoardState;
@@ -311,8 +314,10 @@ export type TableStore = {
   readonly state: TableState;
   /** Send a player action from the hero seat. Errors surface via lastError. */
   send(action: PlayerAction): void;
-  /** Take a seat (ws join). No-op when already seated. */
-  joinSeat(seat: number): void;
+  /** Take a seat (ws join). Name required for guests; stack in cents. */
+  joinSeat(seat: number, name?: string, stackCents?: number): void;
+  /** Identity of this connection (display name + guest flag), once resolved. */
+  readonly me: { name: string; isGuest: boolean } | null;
   /** Arm a bomb pot for the next hand (manual mode). */
   armBombPot(): void;
   /** Force hero hole cards next hand (dev builds only). Wire card numbers. */

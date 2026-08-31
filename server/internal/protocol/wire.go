@@ -5,7 +5,8 @@ type ClientMsg struct {
 	Type   string `json:"type"` // join | leave | action | chat | rabbit | bomb_pot | dev_deal
 	Seat   int    `json:"seat,omitempty"`
 	Name   string `json:"name,omitempty"`
-	Kind   string `json:"kind,omitempty"` // fold | check | call | bet (raise-TO)
+	Stack  int64  `json:"stack,omitempty"` // join: requested buy-in in cents (clamped server-side)
+	Kind   string `json:"kind,omitempty"`  // fold | check | call | bet (raise-TO)
 	Amount int64  `json:"amount,omitempty"`
 	Text   string `json:"text,omitempty"`
 	Reveal *bool  `json:"reveal,omitempty"` // 7-2 uncontested decision

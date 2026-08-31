@@ -278,3 +278,25 @@ func hasEvent(evs []Event, typ EventType) bool {
 	}
 	return false
 }
+
+// TestHandStartedCarriesButtonSeat: clients animate the dealer-button move
+// from this event; seat 0 must survive (pointer field, not omitempty int).
+func TestHandStartedCarriesButtonSeat(t *testing.T) {
+	for _, btn := range []int{0, 2} {
+		seats := []SeatState{
+			{Seat: 0, Player: "A", Stack: 10000},
+			{Seat: 1, Player: "B", Stack: 10000},
+			{Seat: 2, Player: "C", Stack: 10000},
+		}
+		cfg := baseCfg()
+		cfg.ButtonSeat = btn
+		r, err := startHand(cfg, seats, mustDeck(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		evs := tick(t, r)
+		if evs[0].Type != EvHandStarted || evs[0].ButtonSeat == nil || *evs[0].ButtonSeat != btn {
+			t.Fatalf("btn=%d: hand_started button_seat = %v", btn, evs[0].ButtonSeat)
+		}
+	}
+}
