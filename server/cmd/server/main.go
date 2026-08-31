@@ -48,10 +48,21 @@ func main() {
 		log.Fatalf("auth: %v", err)
 	}
 
+	// -healthcheck: container HEALTHCHECK probe — hits the running server's
+	// /healthz on localhost and exits 0/1 (distroless has no shell/curl).
+	if len(os.Args) > 1 && os.Args[1] == "-healthcheck" {
+		resp, err := http.Get("http://127.0.0.1:" + env("PORT", "8080") + "/healthz")
+		if err != nil || resp.StatusCode != http.StatusOK {
+			os.Exit(1)
+		}
+		resp.Body.Close()
+		os.Exit(0)
+	}
+
 	var st *store.Store
 	var mgr *table.Manager
 	if dbURL != "" {
-		st, err = store.New(nil, dbURL)
+		st, err = store.New(context.Background(), dbURL)
 		if err != nil {
 			log.Fatalf("store: %v", err)
 		}
@@ -211,6 +222,14 @@ func main() {
 		writeJSON(w, http.StatusOK, rows)
 	}
 
+	allowedOrigin := env("ALLOWED_ORIGIN", "*")
+	// Specific origin also unlocks cross-origin WS upgrades (browsers send
+	// Origin on WS handshakes); "*" keeps dev localhost-only defaults.
+	wsOrigins := []string(nil)
+	if allowedOrigin != "*" {
+		wsOrigins = append(wsOrigins, allowedOrigin)
+	}
+
 	mux := http.NewServeMux()
 
 	// REST: tables.
@@ -314,7 +333,7 @@ func main() {
 			}
 		}
 		t := mgr.Get(*row)
-		c := ws.Upgrade(w, r, auth.UserID(r.Context()), t.Send, t.Detach)
+		c := ws.Upgrade(w, r, auth.UserID(r.Context()), t.Send, t.Detach, wsOrigins...)
 		if c != nil {
 			t.Attach(c)
 		}
@@ -329,7 +348,7 @@ func main() {
 	addr := env("PORT", "8080")
 	srv := &http.Server{
 		Addr:              ":" + addr,
-		Handler:           logRequests(cors(mux)),
+		Handler:           logRequests(cors(allowedOrigin, mux)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	log.Printf("server: listening on :%s", addr)
@@ -354,11 +373,12 @@ func logRequests(h http.Handler) http.Handler {
 	})
 }
 
-// cors: permissive dev CORS (the vite dev server is a different origin);
-// auth stays token-gated. WebSockets don't need it but REST does.
-func cors(h http.Handler) http.Handler {
+// cors: REST cross-origin for the web frontend. ALLOWED_ORIGIN env sets the
+// Access-Control-Allow-Origin value (default "*" for dev; set to the Render
+// URL in prod). WebSockets don't need it but REST does.
+func cors(allowedOrigin string, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == http.MethodOptions {

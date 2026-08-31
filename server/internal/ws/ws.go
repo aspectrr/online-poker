@@ -36,11 +36,13 @@ type Client struct {
 // UserID of the authenticated connection owner.
 func (c *Client) UserID() string { return c.userID }
 
-func Upgrade(w http.ResponseWriter, r *http.Request, userID string, onMsg func(*Client, protocol.ClientMsg), onClose func(*Client)) *Client {
+func Upgrade(w http.ResponseWriter, r *http.Request, userID string, onMsg func(*Client, protocol.ClientMsg), onClose func(*Client), extraOriginPatterns ...string) *Client {
+	// Vite dev server (localhost:5173) is a different origin; auth is
+	// token-gated, so localhost patterns are safe to allow. Prod frontends
+	// pass their origin via ALLOWED_ORIGIN (main.go) through extra patterns.
+	patterns := append([]string{"localhost:*", "127.0.0.1:*"}, extraOriginPatterns...)
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		// Vite dev server (localhost:5173) is a different origin; auth is
-		// token-gated, so localhost patterns are safe to allow.
-		OriginPatterns: []string{"localhost:*", "127.0.0.1:*"},
+		OriginPatterns: patterns,
 	})
 	if err != nil {
 		log.Printf("ws: upgrade: %v", err)
