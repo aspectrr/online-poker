@@ -42,7 +42,8 @@ export function CreateTableDialog(props: { onCreated: () => void }) {
   const [trigger, setTrigger] = createSignal({ ...DEFAULT_TRIGGER });
   // Starting stack entry unit: big blinds or dollars (server always stores bb).
   const [stackUsd, setStackUsd] = createSignal(false);
-  const stackUsdValue = () => +((config().startingStackBb * config().bigBlindCents) / 100).toFixed(2);
+  const stackUsdValue = () =>
+    +((config().startingStackBb * config().bigBlindCents) / 100).toFixed(2);
   // keep trigger mirrored into config so submit serializes it
 
   const submit = async (e: SubmitEvent) => {
@@ -102,9 +103,11 @@ export function CreateTableDialog(props: { onCreated: () => void }) {
             </Field>
             <Field
               label="Starting stack"
-              hint={stackUsd()
-                ? `= ${config().startingStackBb}bb`
-                : `= ${money(config().startingStackBb * config().bigBlindCents)}`}
+              hint={
+                stackUsd()
+                  ? `= ${config().startingStackBb}bb`
+                  : `= ${money(config().startingStackBb * config().bigBlindCents)}`
+              }
             >
               <div class="flex gap-2">
                 <Input
@@ -124,8 +127,17 @@ export function CreateTableDialog(props: { onCreated: () => void }) {
                     });
                   }}
                 />
-                <div class="flex overflow-hidden rounded-btn border border-line" role="radiogroup" aria-label="Stack unit">
-                  <For each={[{ u: false, label: "bb" }, { u: true, label: "$" }]}>
+                <div
+                  class="flex overflow-hidden rounded-btn border border-line"
+                  role="radiogroup"
+                  aria-label="Stack unit"
+                >
+                  <For
+                    each={[
+                      { u: false, label: "bb" },
+                      { u: true, label: "$" },
+                    ]}
+                  >
                     {({ u, label }) => (
                       <button
                         type="button"
@@ -317,7 +329,9 @@ export function CreateTableDialog(props: { onCreated: () => void }) {
                   Next hand is a bomb pot when{" "}
                   <span class="font-medium text-fg">
                     {trigger().suits.length
-                      ? `a ${trigger().suits.map((s) => `${trigger().rank}${SUIT_GLYPH[s]}`).join(" or ")}`
+                      ? `a ${trigger()
+                          .suits.map((s) => `${trigger().rank}${SUIT_GLYPH[s]}`)
+                          .join(" or ")}`
                       : `any ${trigger().rank}`}
                   </span>{" "}
                   hits the board.
