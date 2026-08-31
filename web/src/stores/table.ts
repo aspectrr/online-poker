@@ -433,7 +433,7 @@ function createTableStore(tableId: string): TableStore {
           return {
             ...s,
             message: first
-              ? `${s.seats[first.seat]?.player ?? "seat " + first.seat} wins ${money(w.reduce((a, x) => a + x.amount, 0))}${first.hand_name ? ` — ${first.hand_name}` : ""}${boardLabel}`
+              ? `${s.seats[first.seat]?.player ?? "seat " + first.seat} wins ${money(w.reduce((a, x) => a + x.amount, 0))}${first.hand_name ? ` — ${first.hand_name.replace(/_/g, " ")}` : ""}${boardLabel}`
               : s.message,
             seats: s.seats.map((x) =>
               w.some((y) => y.seat === x.seat) ? { ...x, isWinner: true } : x,

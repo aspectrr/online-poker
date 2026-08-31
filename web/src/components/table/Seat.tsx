@@ -26,6 +26,10 @@ export function Seat(props: {
   dealDy: number;
   /** first-to-act landing pulse right after the opening deal */
   landing?: boolean;
+  /** hero only: cards hidden until held (peek) */
+  peeking?: boolean;
+  /** hero only: hold/release to peek at your cards */
+  onPeekChange?: (peeking: boolean) => void;
   /** present when a spectator may take this empty seat */
   onJoin?: () => void;
   class?: string;
@@ -39,7 +43,11 @@ export function Seat(props: {
   const landed = () => Math.min(props.dealt, total());
   const dealVars = () => ({ "--deal-dx": `${props.dealDx}px`, "--deal-dy": `${props.dealDy}px` });
 
-  // hero hole cards: stable card refs (memo), landed count gates visibility
+  const canPeek = () => !!props.isHero && props.onPeekChange != null;
+  // hero cards: face-down by default (peek to see); auto-reveal once the
+  // hand is over — no privacy needed at showdown
+  const handOver = () => t().street === "showdown" || t().street === "complete";
+  const heroRevealed = () => !!props.peeking || handOver();
   const heroHand = createMemo(() =>
     props.isHero && t().holeCards[0] ? t().holeCards[0].map((c) => ({ ...c })) : null,
   );
@@ -60,44 +68,67 @@ export function Seat(props: {
     >
       {/* cards sit above the nameplate */}
       <Show when={!empty()}>
-        <div class="flex -space-x-4">
-          <Show
-            when={heroShown()}
-            fallback={
-              <Show
-                when={revealed()}
-                fallback={
-                  // face-down backs, dealt one per beat: fly in from the deck
-                  <div class="flex -space-x-6" style={dealVars()}>
-                    <For each={Array.from({ length: landed() }, (_, i) => i)}>
-                      {() => (
-                        <div class="animate-deal-seat">
-                          <Card faceDown size="sm" />
-                        </div>
-                      )}
-                    </For>
-                  </div>
-                }
-              >
-                <CardRow cards={revealed()!} size="sm" revealed />
-              </Show>
-            }
+        <Show
+          when={heroShown()}
+          fallback={
+            <Show
+              when={revealed()}
+              fallback={
+                // face-down backs, dealt one per beat: fly in from the deck
+                <div class="flex -space-x-6" style={dealVars()}>
+                  <For each={Array.from({ length: landed() }, (_, i) => i)}>
+                    {() => (
+                      <div class="animate-deal-seat">
+                        <Card faceDown size="sm" />
+                      </div>
+                    )}
+                  </For>
+                </div>
+              }
+            >
+              <CardRow cards={revealed()!} size="sm" revealed />
+            </Show>
+          }
+        >
+          <div
+            role="button"
+            tabindex={0}
+            aria-pressed={!!props.peeking}
+            aria-label="Hold to peek at your cards"
+            class={cn(
+              "flex -space-x-6 select-none",
+              canPeek() &&
+                "cursor-pointer touch-none rounded-lg focus-visible:outline-2 focus-visible:outline-accent",
+              props.peeking && "animate-peek",
+            )}
+            style={dealVars()}
+            onPointerDown={(e) => {
+              if (canPeek()) {
+                e.preventDefault();
+                props.onPeekChange!(true);
+              }
+            }}
+            onPointerUp={() => props.onPeekChange?.(false)}
+            onPointerLeave={() => props.onPeekChange?.(false)}
+            onPointerCancel={() => props.onPeekChange?.(false)}
+            onContextMenu={(e) => canPeek() && e.preventDefault()}
+            onKeyDown={(e) => {
+              if (canPeek() && (e.key === " " || e.key === "Enter")) {
+                e.preventDefault();
+                props.onPeekChange!(true);
+              }
+            }}
+            onKeyUp={() => props.onPeekChange?.(false)}
           >
-            <div class="flex -space-x-6" style={dealVars()}>
-              <For each={heroShown()!}>
-                {(card, i) => (
-                  <div class="animate-deal-seat">
-                    <CardRow
-                      cards={[card]}
-                      size="sm"
-                      revealed={props.table.dealDone || landed() > i() + 1}
-                    />
-                  </div>
-                )}
-              </For>
-            </div>
-          </Show>
-        </div>
+            <For each={heroShown()!}>
+              {(card) => (
+                <div class="animate-deal-seat">
+                  <CardRow cards={[card]} size="sm" revealed={heroRevealed()} />
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
       </Show>
 
       <Show when={!empty()}>

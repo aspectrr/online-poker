@@ -87,7 +87,7 @@ function scriptHand(button: number, handNo: number): Step[] {
     { t: "street", street: "river", board: BOARD.slice(0, 5), text: "River: 2♣" },
     v(bb, "raise", "Bet $1.10", { to: 110, think: 1800 }),
     { t: "hero", timeoutSec: 20 },
-    { t: "award", seat: HERO, text: "you win with ace-high flush" },
+    { t: "award", seat: HERO, text: "you win with a royal flush" },
     { t: "end", delay: 3400 },
   ];
 }

@@ -15,7 +15,7 @@ export function ChipStack(props: {
   class?: string;
 }) {
   const size = () => props.size ?? 22;
-  const h = () => Math.max(5, Math.round(size() * 0.32));
+  const h = () => Math.max(5, Math.round(size() * 0.36));
   const cols = createMemo(() => columns(Math.round(props.cents), 8, props.maxColumns ?? 4));
   return (
     <Show when={cols().length > 0}>
@@ -34,12 +34,11 @@ export function ChipStack(props: {
                     style={{
                       width: `${size()}px`,
                       height: `${h()}px`,
-                      "margin-top": i() === 0 ? "0" : `${-h() * 0.42}px`,
-                      background: `repeating-linear-gradient(90deg, rgba(255,255,255,0.85) 0 2px, transparent 2px 6px), ${chipColor(denom)}`,
+                      "margin-top": i() === 0 ? "0" : `${-h() * 0.3}px`,
+                      background: `repeating-linear-gradient(90deg, rgba(255,255,255,0.9) 0 2px, transparent 2px 5px), ${chipColor(denom)}`,
                       "box-shadow":
-                        "inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -1px 0 rgba(0,0,0,0.5)",
-                      border: "0.5px solid rgba(0,0,0,0.4)",
-                      "z-index": col.length - i(),
+                        "inset 0 1.5px 0 rgba(255,255,255,0.55), inset 0 -1.5px 0 rgba(0,0,0,0.45), 0 1px 1px rgba(0,0,0,0.35)",
+                      border: "0.5px solid rgba(0,0,0,0.45)",
                     }}
                   />
                 )}

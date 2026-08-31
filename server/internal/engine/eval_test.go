@@ -176,3 +176,25 @@ func TestEvaluatePLONeverExceedsBest5of9(t *testing.T) {
 		}
 	}
 }
+
+// Royal flush is the ace-high straight flush: it must outrank every other
+// straight flush via the straight-high tiebreaker, and name as royal_flush.
+func TestRoyalFlushBeatsLowerStraightFlushes(t *testing.T) {
+	royal := eval7From(t, "As", "Ks", "Qs", "Js", "Ts", "2c", "3d")
+	for _, lo := range [][]string{
+		{"Ks", "Qs", "Js", "Ts", "9s", "2c", "3d"}, // king-high
+		{"9h", "8h", "7h", "6h", "5h", "2d", "3d"}, // nine-high
+		{"Ad", "2d", "3d", "4d", "5d", "Kc", "Qh"}, // steel wheel
+	} {
+		lv := eval7From(t, lo...)
+		if royal <= lv {
+			t.Fatalf("royal must beat %v: %d vs %d", lo, royal, lv)
+		}
+	}
+	if got := HandCategoryName(royal); got != "royal_flush" {
+		t.Fatalf("royal named %q, want royal_flush", got)
+	}
+	if got := HandCategoryName(eval7From(t, "Ks", "Qs", "Js", "Ts", "9s", "2c", "3d")); got != "straight_flush" {
+		t.Fatalf("king-high SF named %q, want straight_flush", got)
+	}
+}

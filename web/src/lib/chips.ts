@@ -1,19 +1,19 @@
 /**
  * Chip denominations for stack rendering. Server money stays int64 cents —
  * denominations are pure presentation, broken down greedily client-side.
- * Casino-standard colors scaled to cents: 1/5/25/100/500/2500/10000.
+ * Colors from the Notion design system (DESIGN.md), one hue per denom.
  */
 
 export type ChipDenom = { cents: number; color: string };
 
 const CHIPS: ChipDenom[] = [
-  { cents: 10000, color: "#2f6fdb" }, // blue
-  { cents: 2500, color: "#e6b422" }, // yellow
-  { cents: 500, color: "#7b4dbb" }, // purple
-  { cents: 100, color: "#26282e" }, // black
-  { cents: 25, color: "#2e9e5b" }, // green
-  { cents: 5, color: "#d94141" }, // red
-  { cents: 1, color: "#e8e6e3" }, // white
+  { cents: 10000, color: "#0075de" }, // notion blue
+  { cents: 2500, color: "#02093a" }, // midnight
+  { cents: 500, color: "#f64932" }, // coral
+  { cents: 100, color: "#12805c" }, // success
+  { cents: 25, color: "#ffb110" }, // marigold
+  { cents: 5, color: "#62aef0" }, // sky
+  { cents: 1, color: "#f6f5f4" }, // paper
 ];
 
 export const chipColor = (cents: number) =>

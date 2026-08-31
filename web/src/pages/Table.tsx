@@ -178,6 +178,15 @@ export function TablePage() {
     setSpectating(false);
   };
 
+  // peek: hero cards stay face-down; hold to look (mimics protecting your hand)
+  const [peeking, setPeeking] = createSignal(false);
+  createEffect(
+    on(
+      () => t().handNo,
+      () => setPeeking(false), // new hand: cards go back in the dark
+    ),
+  );
+
   // reconnect banner (ASPTR-193): surface ws drops; suppress the initial connecting flash
   const [everOpen, setEverOpen] = createSignal(false);
   createComputed(() => {
@@ -380,6 +389,8 @@ export function TablePage() {
                       dealDx={(0.5 - fx) * DESIGN_W}
                       dealDy={(0.5 - fy) * DESIGN_H}
                       landing={t().landingSeat === seat.seat}
+                      peeking={seat.seat === t().heroSeat ? peeking() : undefined}
+                      onPeekChange={seat.seat === t().heroSeat ? setPeeking : undefined}
                       onJoin={canJoin() ? () => openJoinAt(seat.seat) : undefined}
                       style={`left:${fx * 100}%; top:${fy * 100}%`}
                     />
@@ -620,9 +631,9 @@ function BetChips(props: { pos: [number, number]; from: [number, number]; bet: n
                 width: "20px",
                 height: "7px",
                 background:
-                  "repeating-linear-gradient(90deg, rgba(255,255,255,0.85) 0 2px, transparent 2px 6px), #d94141",
+                  "repeating-linear-gradient(90deg, rgba(255,255,255,0.9) 0 2px, transparent 2px 5px), #f64932",
                 "box-shadow":
-                  "inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -1px 0 rgba(0,0,0,0.5)",
+                  "inset 0 1.5px 0 rgba(255,255,255,0.55), inset 0 -1.5px 0 rgba(0,0,0,0.45)",
               }}
             />
           </span>

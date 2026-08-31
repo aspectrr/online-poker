@@ -150,6 +150,10 @@ func eval5(c [5]Card) uint32 {
 func HandCategoryName(v uint32) string {
 	switch v >> 26 {
 	case 8:
+		// royal = ace-high straight flush (tb[0] holds the straight high)
+		if (v>>22)&0xF == 12 {
+			return "royal_flush"
+		}
 		return "straight_flush"
 	case 7:
 		return "quads"
