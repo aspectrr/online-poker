@@ -1,5 +1,6 @@
 import { Show, createSignal } from 'solid-js'
 import { A } from '@solidjs/router'
+import { Logo } from '../components/Logo'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { supabase } from '../lib/supabase'
@@ -30,12 +31,9 @@ export function AuthPage() {
       <div class="w-full max-w-sm">
         <A href="/" class="mb-8 flex items-center justify-center gap-2.5">
           <span class="grid size-9 place-items-center rounded-btn bg-accent-tint text-accent">
-            <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <path d="M4 9c5.5 0 10.5-2 16-2v10c-5.5 0-10.5 2-16 2V9Z" />
-              <path d="M4 11c1.5 0 2.5 1 2.5 2S5.5 15 4 15" />
-            </svg>
+            <Logo class="size-5" />
           </span>
-          <span class="font-display text-lg font-bold tracking-tight text-fg">aspectrr</span>
+          <span class="font-display text-lg font-bold tracking-tight text-fg">riverrats</span>
         </A>
 
         <div class="rounded-card border border-line bg-surface p-6">

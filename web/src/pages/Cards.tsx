@@ -4,6 +4,7 @@ import { Button } from '../components/ui/Button'
 import { Card, RANKS, SUITS, type Rank } from '../components/cards/Card'
 import { CardRow, dealDelay, type CardSpec } from '../components/cards/CardRow'
 import { RabbitMark } from '../components/cards/RabbitMark'
+import { Logo } from '../components/Logo'
 
 const PIP_RANKS: Rank[] = ['2', '3', '4', '5', '6', '7', '8', '9', '10']
 /** deterministic-ish demo hands */
@@ -54,12 +55,9 @@ export function CardsPage() {
         <div class="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
           <A href="/" class="flex items-center gap-2.5">
             <span class="grid size-8 place-items-center rounded-btn bg-accent-tint text-accent">
-              <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <path d="M4 9c5.5 0 10.5-2 16-2v10c-5.5 0-10.5 2-16 2V9Z" />
-                <path d="M4 11c1.5 0 2.5 1 2.5 2S5.5 15 4 15" />
-              </svg>
+              <Logo class="size-5" />
             </span>
-            <span class="font-display text-base font-bold tracking-tight text-fg">aspectrr</span>
+            <span class="font-display text-base font-bold tracking-tight text-fg">riverrats</span>
           </A>
           <span class="rounded-pill border border-line bg-surface px-2.5 py-0.5 text-xs font-medium text-fg-muted">
             /cards · ASPTR-195

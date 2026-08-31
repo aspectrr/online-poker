@@ -1,5 +1,6 @@
 import { For, Show, createResource, createSignal, onMount } from 'solid-js'
 import { A, useNavigate } from '@solidjs/router'
+import { Logo } from '../components/Logo'
 import { Button } from '../components/ui/Button'
 import { CreateTableDialog } from '../components/CreateTableDialog'
 import { FeedbackDialog } from '../components/FeedbackDialog'
@@ -49,13 +50,10 @@ export function LobbyPage() {
         <div class="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
           <A href="/" class="flex items-center gap-2.5">
             <span class="grid size-8 place-items-center rounded-btn bg-accent-tint text-accent">
-              <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <path d="M4 9c5.5 0 10.5-2 16-2v10c-5.5 0-10.5 2-16 2V9Z" />
-                <path d="M4 11c1.5 0 2.5 1 2.5 2S5.5 15 4 15" />
-              </svg>
+              <Logo class="size-5" />
             </span>
             <span class="font-display text-base font-bold tracking-tight text-fg">
-              aspectrr
+              riverrats
             </span>
           </A>
           <div class="flex items-center gap-3">
