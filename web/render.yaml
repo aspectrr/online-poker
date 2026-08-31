@@ -1,0 +1,23 @@
+# Render blueprint for the web frontend (static SPA).
+# Render reads render.yaml from the repo root — if creating via Blueprint,
+# copy this file to the repo root first, or create the service manually with
+# the settings in DEPLOY.md.
+services:
+  - type: web
+    name: online-poker-web
+    runtime: static
+    rootDir: web
+    buildCommand: bun install --frozen-lockfile && bun run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false # bare origin, e.g. https://online-poker-server.fly.dev (no path)
+      - key: VITE_SUPABASE_URL
+        sync: false # https://<project-ref>.supabase.co
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false # Supabase → Settings → API → anon public key
+    routes:
+      # SPA fallback: everything not a real file serves index.html.
+      - type: rewrite
+        source: /*
+        destination: /index.html
