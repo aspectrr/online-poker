@@ -1,49 +1,50 @@
-import { For, Show } from "solid-js";
+import { For, Show, createMemo } from "solid-js";
+import { chipColor, columns } from "../../lib/chips";
 import { cn } from "../../lib/cn";
 
 /**
- * Flat accent-hue chip tower (DESIGN.md: flat accent fills). Chip count
- * scales log-ish with `stack` relative to `unit` (usually the big blind),
- * capped — stack proportionality visible at a glance.
+ * Side-view chip stacks broken into denominations (lib/chips): largest
+ * chips leftmost, ≤ 8 chips per column, columns capped. Callers render the
+ * exact amount separately — the stacks are the visual, not the number.
  */
-const HUES = ["#0075de", "#ffb110", "#f64932", "#62aef0", "#02093a"];
-
-/** chips for a stack: 1 chip at 1 unit, +1 per doubling, capped at max. */
-export function chipCount(stack: number, unit: number, max = 8): number {
-  if (unit <= 0 || stack <= 0) return 0;
-  return Math.min(max, 1 + Math.floor(Math.log2(stack / unit) + 1e-4));
-}
-
 export function ChipStack(props: {
-  stack: number;
-  /** value of one chip for the log scale (usually the big blind) */
-  unit: number;
-  max?: number;
+  cents: number;
   /** chip diameter px */
   size?: number;
+  maxColumns?: number;
   class?: string;
 }) {
-  const count = () => chipCount(props.stack, props.unit, props.max ?? 8);
-  const size = () => props.size ?? 13;
+  const size = () => props.size ?? 22;
+  const h = () => Math.max(5, Math.round(size() * 0.32));
+  const cols = createMemo(() => columns(Math.round(props.cents), 8, props.maxColumns ?? 4));
   return (
-    <Show when={count() > 0}>
+    <Show when={cols().length > 0}>
       <div
-        class={cn("flex flex-col items-center", props.class)}
+        class={cn("flex items-end gap-1", props.class)}
         role="img"
-        aria-label={`chip stack: ${count()} chips`}
+        aria-label={`chip stacks worth ${props.cents} cents`}
       >
-        <For each={Array.from({ length: count() })}>
-          {(_, i) => (
-            <span
-              class="block rounded-full border border-black/25 shadow-[inset_0_-2px_0_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.35)]"
-              style={{
-                width: `${size()}px`,
-                height: `${size()}px`,
-                "margin-top": i() === 0 ? "0" : `${-size() * 0.62}px`,
-                background: HUES[i() % HUES.length],
-                "z-index": i(),
-              }}
-            />
+        <For each={cols()}>
+          {(col) => (
+            <div class="flex flex-col items-center">
+              <For each={col}>
+                {(denom, i) => (
+                  <span
+                    class="block rounded-[50%]"
+                    style={{
+                      width: `${size()}px`,
+                      height: `${h()}px`,
+                      "margin-top": i() === 0 ? "0" : `${-h() * 0.42}px`,
+                      background: `repeating-linear-gradient(90deg, rgba(255,255,255,0.85) 0 2px, transparent 2px 6px), ${chipColor(denom)}`,
+                      "box-shadow":
+                        "inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -1px 0 rgba(0,0,0,0.5)",
+                      border: "0.5px solid rgba(0,0,0,0.4)",
+                      "z-index": col.length - i(),
+                    }}
+                  />
+                )}
+              </For>
+            </div>
           )}
         </For>
       </div>

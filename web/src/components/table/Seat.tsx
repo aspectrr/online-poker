@@ -3,7 +3,6 @@ import { money } from "../../lib/money";
 import type { SeatState, TableState } from "../../lib/tableTypes";
 import { CardRow } from "../cards/CardRow";
 import { Card } from "../cards/Card";
-import { ChipStack } from "./ChipStack";
 import { cn } from "../../lib/cn";
 
 /** Countdown ring color shifts to danger under 5s. */
@@ -103,13 +102,6 @@ export function Seat(props: {
 
       <Show when={!empty()}>
         <div class="relative flex items-end gap-1">
-          {/* chip tower: relative stack size (log scale, capped) */}
-          <ChipStack
-            stack={s().stackCents}
-            unit={Math.max(1, t().bbCents)}
-            size={12}
-            class="mb-0.5 origin-bottom"
-          />
           <div
             class={cn(
               "relative w-full rounded-xl border px-2.5 py-1.5 backdrop-blur-sm transition-shadow duration-300",
@@ -176,13 +168,7 @@ export function Seat(props: {
           </div>
         </div>
 
-        {/* street bet chips + amount */}
-        <Show when={s().betCents > 0}>
-          <div class="flex items-center gap-1 rounded-full bg-black/30 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-fg">
-            <span class="inline-block size-3 rounded-full border border-white/60 bg-danger shadow-inner" />
-            {money(s().betCents)}
-          </div>
-        </Show>
+        {/* street bet renders on the felt's bet ring (Table.tsx) */}
       </Show>
 
       <Show when={empty()}>

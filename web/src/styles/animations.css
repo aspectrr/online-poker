@@ -183,6 +183,25 @@
   animation: landing-pop 1.3s cubic-bezier(0.22, 1, 0.36, 1) 1;
 }
 
+/* Bet placement: a chip flies from the player's stack to the bet ring.
+   --bet-x/--bet-y = stack→ring delta (set inline per seat). */
+@keyframes bet-fly {
+  from {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  to {
+    transform: translate(calc(-50% + var(--bet-x, 0px)), calc(-50% + var(--bet-y, 0px))) scale(0.85);
+    opacity: 0;
+  }
+}
+.animate-bet-fly {
+  animation: bet-fly 600ms cubic-bezier(0.3, 0.7, 0.4, 1) forwards;
+}
+
 /* Gold celebratory toast pop (7-2 bounty) */
 @keyframes toast-gold {
   0% {

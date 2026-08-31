@@ -13,6 +13,7 @@ import { provideTable, BUTTON_TRAVEL_MS } from "../stores/table";
 import { createDemoTable } from "../stores/demoTable";
 import type { TableStore, UICard } from "../lib/protocol";
 import { Seat } from "../components/table/Seat";
+import { ChipStack } from "../components/table/ChipStack";
 import { JoinModal } from "../components/table/JoinModal";
 import { TableCenter } from "../components/table/TableCenter";
 import { ActionBar } from "../components/table/ActionBar";
@@ -21,7 +22,7 @@ import { HistoryDrawer } from "../components/table/HistoryDrawer";
 import { FeedbackDialog } from "../components/FeedbackDialog";
 import { Card } from "../components/cards/Card";
 import { RabbitMark } from "../components/cards/RabbitMark";
-import { blinds } from "../lib/money";
+import { blinds, money } from "../lib/money";
 
 const API_URL = import.meta.env.VITE_API_URL as string | undefined;
 
@@ -391,6 +392,28 @@ export function TablePage() {
                 <DealerButton seat={t().buttonSeat} positions={positions()} />
               </Show>
 
+              {/* felt chips: player stacks + street bets on the inner ring */}
+              <For each={t().seats}>
+                {(seat) => {
+                  if (!seat.player) return null;
+                  const p = positions()[seat.seat] ?? [0.5, 0.5];
+                  const stackPos: [number, number] = [
+                    0.5 + (p[0] - 0.5) * 0.72,
+                    0.5 + (p[1] - 0.5) * 0.72,
+                  ];
+                  const betPos: [number, number] = [
+                    0.5 + (p[0] - 0.5) * 0.5,
+                    0.5 + (p[1] - 0.5) * 0.5,
+                  ];
+                  return (
+                    <>
+                      <FeltChips pos={stackPos} cents={seat.stackCents} />
+                      <BetChips pos={betPos} from={stackPos} bet={seat.betCents} />
+                    </>
+                  );
+                }}
+              </For>
+
               {/* chips flying to winner */}
               <For each={winners()}>
                 {(w) => <ChipFly toSeat={positions()[w.seat] ?? [0.5, 0.5]} />}
@@ -482,9 +505,16 @@ function DealerButton(props: { seat: number; positions: [number, number][] }) {
   // eslint-disable-next-line no-unassigned-vars -- Solid ref capture assigns this
   let el!: HTMLDivElement;
   const pos = () => props.positions[props.seat] ?? [0.5, 0.5];
-  // parked just below the nameplate (seat column is ~110px tall, centered)
-  const at = ([fx, fy]: [number, number]) =>
-    `translate(${fx * DESIGN_W}px, ${fy * DESIGN_H + 44}px) translate(-50%, -50%)`;
+  // parked beside the nameplate: 28px out from the anchor, 88px along the
+  // ellipse tangent — clears the plate at every seat angle, overhang included
+  const at = ([fx, fy]: [number, number]) => {
+    const dx = fx - 0.5;
+    const dy = fy - 0.5;
+    const len = Math.hypot(dx, dy) || 1;
+    const x = fx * DESIGN_W + (dx / len) * 28 - (dy / len) * 88;
+    const y = fy * DESIGN_H + (dy / len) * 28 + (dx / len) * 88;
+    return `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+  };
 
   createEffect(
     on(
@@ -517,6 +547,88 @@ function DealerButton(props: { seat: number; positions: [number, number][] }) {
     >
       D
     </div>
+  );
+}
+
+/**
+ * Player's chip stack on the felt, between the seat and the pot. Pure
+ * display: denomination breakdown is approximate at the cap, the exact
+ * amount stays on the nameplate.
+ */
+function FeltChips(props: { pos: [number, number]; cents: number }) {
+  return (
+    <Show when={props.cents > 0}>
+      <div
+        class="pointer-events-none absolute z-[5] -translate-x-1/2 -translate-y-1/2"
+        style={{ left: `${props.pos[0] * 100}%`, top: `${props.pos[1] * 100}%` }}
+      >
+        <ChipStack cents={props.cents} size={20} maxColumns={4} />
+      </div>
+    </Show>
+  );
+}
+
+let betFlightId = 0;
+
+/** Street bet on the inner ring: chips + exact amount; a chip flies in from
+ * the player's stack whenever the bet grows (bet, raise, blind post). */
+function BetChips(props: { pos: [number, number]; from: [number, number]; bet: number }) {
+  const [flights, setFlights] = createSignal<number[]>([]);
+  createEffect(
+    on(
+      () => props.bet,
+      (b, prev) => {
+        if (prev == null || b <= prev) return;
+        const id = ++betFlightId;
+        setFlights((f) => [...f, id]);
+        setTimeout(() => setFlights((f) => f.filter((x) => x !== id)), 650);
+      },
+      { defer: true },
+    ),
+  );
+  const dx = () => `${(props.pos[0] - props.from[0]) * DESIGN_W}px`;
+  const dy = () => `${(props.pos[1] - props.from[1]) * DESIGN_H}px`;
+  return (
+    <Show when={props.bet > 0}>
+      <div
+        class="pointer-events-none absolute z-[6] flex flex-col items-center gap-0.5"
+        style={{
+          left: `${props.pos[0] * 100}%`,
+          top: `${props.pos[1] * 100}%`,
+          transform: "translate(-50%, -50%)",
+        }}
+      >
+        <ChipStack cents={props.bet} size={18} maxColumns={3} />
+        <span class="rounded bg-black/50 px-1.5 text-[11px] font-bold tabular-nums text-white/95 shadow">
+          {money(props.bet)}
+        </span>
+      </div>
+      <For each={flights()}>
+        {() => (
+          <span
+            class="animate-bet-fly pointer-events-none absolute z-[7]"
+            style={{
+              left: `${props.from[0] * 100}%`,
+              top: `${props.from[1] * 100}%`,
+              "--bet-x": dx(),
+              "--bet-y": dy(),
+            }}
+          >
+            <span
+              class="block rounded-[50%]"
+              style={{
+                width: "20px",
+                height: "7px",
+                background:
+                  "repeating-linear-gradient(90deg, rgba(255,255,255,0.85) 0 2px, transparent 2px 6px), #d94141",
+                "box-shadow":
+                  "inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -1px 0 rgba(0,0,0,0.5)",
+              }}
+            />
+          </span>
+        )}
+      </For>
+    </Show>
   );
 }
 

@@ -24,13 +24,7 @@ export function TableCenter(props: { table: TableState; dealKey: string }) {
       {/* pot: chip stack scales with size */}
       <Show when={t().potCents > 0 || boards()[0].length > 0}>
         <div class="flex items-center gap-2 rounded-full border border-accent/25 bg-black/35 px-3.5 py-1 shadow-lg shadow-black/30 backdrop-blur-[2px]">
-          <ChipStack
-            stack={t().potCents}
-            unit={Math.max(1, t().bbCents)}
-            max={12}
-            size={11}
-            class="flex-row-reverse items-center"
-          />
+          <ChipStack cents={t().potCents} size={15} maxColumns={5} class="items-center" />
           <span class="text-sm font-bold tabular-nums text-accent">{money(t().potCents)}</span>
           <span class="text-[10px] font-semibold uppercase tracking-widest text-fg-muted">pot</span>
         </div>
