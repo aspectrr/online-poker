@@ -1,4 +1,5 @@
 import type { TableConfig, TableSummary } from './types'
+import type { HandRow } from './history'
 import { authIdentity } from './identity'
 
 /**
@@ -88,6 +89,12 @@ export function createTable(config: TableConfig): Promise<TableSummary> {
     method: 'POST',
     body: JSON.stringify({ name: config.name || 'New Table', game_type: config.gameType, config: configToWire(config) }),
   }).then(rowToSummary)
+}
+
+/** Hand history, newest first (server store.ListHands). */
+export function fetchHands(tableId: string, limit = 50): Promise<HandRow[]> {
+  if (MOCK_MODE) return Promise.resolve([])
+  return req<HandRow[]>(`/api/tables/${encodeURIComponent(tableId)}/hands?limit=${limit}`)
 }
 
 /** ponytail: join is a stub until the table view route exists; wire to WS seat-take later. */

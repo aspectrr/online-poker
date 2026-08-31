@@ -82,6 +82,10 @@ func (t *Table) startHand() {
 	if len(engineSeats) < 2 {
 		return
 	}
+	t.handStart = make([]engine.FinalStack, len(engineSeats))
+	for i, s := range engineSeats {
+		t.handStart[i] = engine.FinalStack{Seat: s.Seat, Player: s.Player, Stack: s.Stack}
+	}
 	var r *engine.HandRunner
 	var err error
 	holeRounds := cfg.Game.HoleCardCount()
@@ -107,6 +111,7 @@ func (t *Table) startHand() {
 	t.runner = r
 	t.handNo = cfg.HandID
 	t.pending = nil
+	t.handEvents = nil // events accumulate per hand only
 	for _, s := range t.seats {
 		s.inHand = s.userID != "" && s.stack > 0 && !s.sittingOut
 		s.folded = false
@@ -257,15 +262,30 @@ func (t *Table) syncSeats() {
 	}
 }
 
-// persistHand: write hand history jsonb.
+// persistHand: write hand history jsonb. Shape (consumed by the web history
+// viewer, web/src/lib/history.ts):
+//   hand_no, bomb_pot, button, start_stacks [{seat,player,stack}],
+//   holes [{seat,cards}] (all revealed — history), events [engine events],
+//   stacks [{seat,player,stack}] (final).
 func (t *Table) persistHand() {
-	if t.persist == nil || t.runner == nil {
+	if t.persist == nil || t.runner == nil || t.persistedNo == t.handNo {
 		return
 	}
+	t.persistedNo = t.handNo
+	holes := make([]map[string]any, 0, len(t.handStart))
+	for _, s := range t.handStart {
+		if cards := t.runner.HolesFor(s.Seat); len(cards) > 0 {
+			holes = append(holes, map[string]any{"seat": s.Seat, "cards": cards})
+		}
+	}
 	hist := map[string]any{
-		"hand_no": t.handNo,
-		"events":  t.handEvents,
-		"stacks":  t.runner.Stacks(),
+		"hand_no":      t.handNo,
+		"bomb_pot":     t.bombPot,
+		"button":       t.button,
+		"start_stacks": t.handStart,
+		"holes":        holes,
+		"events":       t.handEvents,
+		"stacks":       t.runner.Stacks(),
 	}
 	data, err := json.Marshal(hist)
 	if err == nil {

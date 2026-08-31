@@ -1,6 +1,9 @@
 package engine
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // Game type.
 type GameType int
@@ -170,9 +173,9 @@ type SeatState struct {
 
 // Action a player takes on their turn.
 type Action struct {
-	Seat   int
-	Kind   ActionKind
-	Amount int64 // raise-TO total for Raise, cents
+	Seat   int        `json:"seat"`
+	Kind   ActionKind `json:"kind"` // marshals as the string name (fold/check/…)
+	Amount int64      `json:"amount,omitempty"` // raise-TO total for Raise, cents
 }
 
 type ActionKind int
@@ -201,6 +204,28 @@ func (a ActionKind) String() string {
 		return "reveal"
 	case Muck:
 		return "muck"
+	case RabbitHunt:
+		return "rabbithunt"
 	}
 	return "?"
+}
+
+// MarshalJSON: kind as its string name on the wire (was a bare int).
+func (a ActionKind) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + a.String() + `"`), nil
+}
+
+// UnmarshalJSON: accept the string name back (wire symmetry).
+func (a *ActionKind) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	for k := Fold; k <= RabbitHunt; k++ {
+		if k.String() == s {
+			*a = k
+			return nil
+		}
+	}
+	return fmt.Errorf("unknown action kind %q", s)
 }

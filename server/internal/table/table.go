@@ -80,6 +80,12 @@ type Table struct {
 	lastWinner  int
 	timeoutSeat int
 	dev         bool
+	// handStart: seats dealt into the current hand w/ starting stacks
+	// (persistence only; captured in startHand)
+	handStart []engine.FinalStack
+	// persistedNo: last hand_no written (post-hand prompt flow calls
+	// persistHand twice per hand otherwise)
+	persistedNo int64
 
 	inbox   chan inbox
 	persist Persister
