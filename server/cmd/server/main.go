@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -12,6 +13,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -56,7 +58,17 @@ func main() {
 		defer st.Close()
 	}
 	devAuth := os.Getenv("DEV_AUTH") == "1"
-	mgr = table.NewManager(st) // nil store = no persistence (dev)
+	// persist: real store, or in-memory hands in dev no-DB mode so hand
+	// history works backendless. nil = none (non-dev without a database).
+	var persist table.Persister
+	var mem *memHands
+	if st != nil {
+		persist = st
+	} else if devAuth {
+		mem = newMemHands()
+		persist = mem
+	}
+	mgr = table.NewManager(persist)
 	mgr.DevMode = devAuth
 
 	// Fixed no-DB dev table: RIT always, 7-2 on, bomb pot on queens.
@@ -165,6 +177,40 @@ func main() {
 		}
 	}
 
+	getHands := func(w http.ResponseWriter, r *http.Request) {
+		limit := 50
+		if v := r.URL.Query().Get("limit"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 200 {
+				limit = n
+			}
+		}
+		id := r.PathValue("id")
+		var (
+			rows []store.Hand
+			err  error
+		)
+		if st != nil {
+			rows, err = st.ListHands(r.Context(), id, limit)
+		} else if mem != nil {
+			if devLookup != nil && devLookup(id) == nil {
+				http.Error(w, "not found", http.StatusNotFound)
+				return
+			}
+			rows, err = mem.ListHands(r.Context(), id, limit)
+		} else {
+			http.Error(w, "hand history needs a database", http.StatusServiceUnavailable)
+			return
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if rows == nil {
+			rows = []store.Hand{}
+		}
+		writeJSON(w, http.StatusOK, rows)
+	}
+
 	mux := http.NewServeMux()
 
 	// REST: tables.
@@ -238,6 +284,9 @@ func main() {
 		}
 		writeJSON(w, http.StatusOK, row)
 	})))
+
+	// REST: hand history (newest first, ?limit=50 default).
+	mux.Handle("GET /api/tables/{id}/hands", handle(http.HandlerFunc(getHands)))
 
 	// WS: /api/tables/{id}/ws — auth via ?token= (auth.Middleware reads it).
 	mux.Handle("GET /api/tables/{id}/ws", handle(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -321,6 +370,39 @@ func cors(h http.Handler) http.Handler {
 }
 
 func intPtr(i int) *int { return &i }
+
+// memHands: in-memory hand history for DEV_AUTH no-DB mode. Satisfies
+// table.Persister (InsertHand) + serves the GET /hands route (ListHands).
+type memHands struct {
+	mu    sync.Mutex
+	seq   int64
+	tables map[string][]store.Hand // newest last
+}
+
+func newMemHands() *memHands { return &memHands{tables: map[string][]store.Hand{}} }
+
+func (h *memHands) InsertHand(_ context.Context, tableID string, handNo int, data json.RawMessage) (*store.Hand, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.seq++
+	row := store.Hand{ID: h.seq, TableID: tableID, HandNo: handNo, Data: data, CreatedAt: time.Now()}
+	h.tables[tableID] = append(h.tables[tableID], row)
+	return &row, nil
+}
+
+func (h *memHands) ListHands(_ context.Context, tableID string, limit int) ([]store.Hand, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	all := h.tables[tableID]
+	if limit <= 0 || limit > len(all) {
+		limit = len(all)
+	}
+	out := make([]store.Hand, 0, limit)
+	for i := len(all) - 1; i >= 0 && len(out) < cap(out); i-- {
+		out = append(out, all[i])
+	}
+	return out, nil
+}
 
 // newDevID: short random id for in-memory dev tables.
 func newDevID() string {

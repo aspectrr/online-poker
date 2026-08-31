@@ -7,6 +7,7 @@ import { Seat } from '../components/table/Seat'
 import { TableCenter } from '../components/table/TableCenter'
 import { ActionBar } from '../components/table/ActionBar'
 import { SettingsDrawer } from '../components/table/SettingsDrawer'
+import { HistoryDrawer } from '../components/table/HistoryDrawer'
 import { Card } from '../components/cards/Card'
 import { RabbitMark } from '../components/cards/RabbitMark'
 import { blinds } from '../lib/money'
@@ -75,6 +76,7 @@ export function TablePage() {
   })
 
   const [drawerOpen, setDrawerOpen] = createSignal(false)
+  const [historyOpen, setHistoryOpen] = createSignal(false)
 
   // chips-to-winner: fly chips from center to winner seat
   const winners = () => t().seats.filter((s) => s.isWinner)
@@ -97,6 +99,16 @@ export function TablePage() {
             <Show when={t().bombPot}><span class="font-bold text-accent">BOMB POT · </span></Show>
             {t().street}
           </span>
+          <button
+            type="button"
+            title="Hand history"
+            class="grid size-7 place-items-center rounded-lg text-fg-muted transition-colors hover:bg-surface-raised hover:text-fg"
+            onClick={() => setHistoryOpen(true)}
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" class="size-4" aria-hidden="true">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm1-12.5v4.29l2.04 1.17a.75.75 0 0 1-.75 1.3l-2.41-1.39a.75.75 0 0 1-.38-.65V5.5a.75.75 0 0 1 1.5 0Z" clip-rule="evenodd" />
+            </svg>
+          </button>
           <button
             type="button"
             title="Table settings"
@@ -226,6 +238,9 @@ export function TablePage() {
         onArmBombPot={() => store.armBombPot()}
         onClose={() => setDrawerOpen(false)}
       />
+
+      {/* hand-history drawer */}
+      <HistoryDrawer open={historyOpen()} tableId={params.id ?? 'dev-table'} onClose={() => setHistoryOpen(false)} />
     </div>
   )
 }

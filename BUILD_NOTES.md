@@ -506,3 +506,44 @@ All in `web/` + transport-layer `server/` (engine untouched except two additive 
 - Bomb-pot trigger banner needs a trigger match (server-side); manual arm covers deterministic demos. `bomb_pot_next` in a snapshot carries no card (banner without card) until the armed event arrives.
 - Trigger-mode live demo still not captured (dev-table queens are chance-based); manual path fully verified. Trigger wiring is unit-tested.
 - Post-hand prompt approximations from ASPTR-199 (winner-seat inference) unchanged.
+
+---
+
+# BUILD_NOTES — ASPTR-190: Hand history + viewer
+
+Server `server/` + frontend `web/`. New deps: none. Goal met: played two hands (one bomb pot) live, opened the drawer, expanded both, verified every line against the persisted jsonb.
+
+## Server
+
+- **`GET /api/tables/{id}/hands?limit=50`** (`cmd/server/main.go`): store.ListHands (newest first) behind the usual auth middleware; `limit` clamped 1–200, default 50. No-DB dev mode serves from a new in-memory `memHands` (same package, satisfies `table.Persister` + `ListHands`) so hand history works backendless; unknown table → 404, non-dev no-DB → 503. Empty result serializes as `[]` not null.
+- **`NewManager(persist Persister)`** signature change (was `*store.Store`): main.go now wires store / memHands / nil explicitly. Existing `NewManager(nil)` test call sites unchanged.
+- **Persistence shape fixed + enriched** (`internal/table/hands.go` persistHand) — the web viewer documents/consumes this: `hand_no, bomb_pot, button, start_stacks [{seat,player,stack}], holes [{seat,cards}] (all revealed — history), events [engine events], stacks (final)`. `handStart` captured in startHand; holes built from `runner.HolesFor` at persist time (public events never carry private cards).
+- **Bug: handEvents never reset.** Every hand's jsonb contained all prior hands' events (engine hand_ids 1..N mixed in one row). Fixed: `t.handEvents = nil` in startHand.
+- **Bug: double persist on post-hand prompt.** persistHand ran again after the 7-2/rabbit prompt resolved → duplicate rows. Fixed: `persistedNo` guard.
+- **Bug: engine `Action` marshaled as `{"Seat":0,"Kind":2}`** (no json tags, bare int kind) — broke any consumer reading `action.kind`. Now `{"seat":0,"kind":"call"}` via tags + `ActionKind.MarshalJSON`/`UnmarshalJSON` (string name, full round-trip). This also fixes the live table UI's per-action street labels, which silently never matched (`e.action?.kind === 'raise'`). Found because `TestTimeoutAutoCheck` went 10/10-fail: the test's drain helper ignores json errors, so string kind + missing Unmarshal decoded partial Action with Kind=0 (fold). Symmetric marshal/unmarshal is the fix, not test leniency.
+
+## Web (`web/src`)
+
+- **`lib/history.ts`** — types over the persisted jsonb (`HandRow` = store.Hand with Go field names) + all review derivation client-side: per-street action log (blinds w/ SB/BB, antes, folds/checks/calls/raise-to, all-in runout marker), board rows keyed by `board_index` (labeled BOARD A/B for bomb pot, Run 1/2 for RIT), pot awards (winner, amount, hand name prettified `full_house`→"full house", board label), 7-2 bounty lines, rabbit cards, list-row totals (pot = Σ award amounts, winners aggregated by seat).
+- **`components/table/HistoryDrawer.tsx`** — slide-over like SettingsDrawer from a new header clock icon (`?` title="Hand history"). Fetch on open via `api.fetchHands` (token attached by req()). Four states: loading / error ("History unavailable" + 503 no-database hint) / empty ("No hands yet") / list. Rows: `#no · $pot · winners · time`, click to expand full review; expanded content per ticket: seats w/ starting stacks, hole cards all revealed (existing `Card size="sm"`), boards, per-street action, result. Two-line hole-card layout so 4 bomb-pot cards fit the drawer.
+- **`lib/api.ts`**: `fetchHands(tableId, limit=50)`; MOCK_MODE returns `[]` (empty-state demo).
+
+## E2E (mandatory pass)
+
+`DEV_AUTH=1 go run ./cmd/server` + `VITE_API_URL=http://localhost:8080 bun run dev`. Table via curl: NLHE 10/20, 100bb, 60s clock, rabbit on, 7-2 $1, bomb pot manual. Players: two headless bun WS clients (same join/action/post-hand protocol as the UI — see note below) + one Chrome tab as spectator for the drawer.
+
+- **Hand 1 (normal):** SB call, BB check, check-check ×3 streets → showdown; carol2 wins $0.40 — flush (A♣ high, board 3♣6♣10♥10♣4♣). Drawer row: `#1 $0.40 carol2 10:38 PM` ✓. Expanded: starting stacks $20.00 both, holes A♣2♦ / Q♥4♦, PREFLOP posts SB $0.10/posts BB $0.20/calls $0.10/checks, FLOP/TURN/RIVER check pairs, RESULT "carol2 wins $0.40 — flush" — all matching REST jsonb.
+- **Hand 2 (bomb pot, manual arm):** both ante $0.20, 4 hole cards each, double flop immediately, check-down → dave2 trips nines (board A) + full house QQQ77 (board B), $0.20 each. Row: `#2 $0.40 dave2` (pot = Σ both awards). Expanded: "HOLE CARDS (BOMB POT — 4 EACH)", BOARD A / BOARD B rows with full runouts, antes line, per-street checks, "dave2 wins $0.20 — trips (board A)" + "full house (board B)". Hand names/board labels verified against `pot_awarded` winners (board_cards + hand_name) — engine legit (9♠ was dave2's clipped 4th card before the layout fix).
+- **Empty state:** dev-table (no hands) → "No hands yet" card against a live backend.
+- **Error state:** server stopped → "History unavailable — Failed to fetch"; the 503 no-database path renders the dedicated hint.
+- Console: 0 errors/warnings. `go vet` + `go test ./...` green (111). `tsc -b && vite build` green (258.6kB js / 9.1kB css gz).
+
+## Deviation note
+
+Two Orca-browser tabs throttled hard when backgrounded (ws reconnect loop every ~15s, missed action windows, hands timeout-folded — same failure ASPTR-187 hit). Action-driving moved to the headless WS bot; the history UI itself was verified visually in Chrome via chrome-devtools (screenshots + DOM probes). Ghost seats from closed tabs stay seated until the server restarts (in-memory dev mode) — cosmetic, dev-only.
+
+## Known gaps / TODO
+
+- Post-hand prompt actions (show 7-2/muck/rabbit) are persisted as events, but the drawer doesn't render a dedicated "mucked" marker — showdown section relies on pot_awarded/showdown events only.
+- `memHands` is per-process: server restart wipes dev hand history (by design; real history needs DATABASE_URL).
+- List rows cap at limit=50 with no pagination/load-more.

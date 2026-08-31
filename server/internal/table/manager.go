@@ -16,14 +16,11 @@ type Manager struct {
 	DevMode bool
 }
 
-// NewManager takes the concrete store so a nil *store.Store doesn't become
-// a typed-nil Persister interface (which would panic on first InsertHand).
-func NewManager(st *store.Store) *Manager {
-	m := &Manager{tables: map[string]*Table{}}
-	if st != nil {
-		m.persist = st
-	}
-	return m
+// NewManager takes the Persister directly: pass a nil interface for no
+// persistence (dev). Callers must not pass a typed-nil *store.Store (that
+// becomes a non-nil interface and panics on first InsertHand).
+func NewManager(persist Persister) *Manager {
+	return &Manager{tables: map[string]*Table{}, persist: persist}
 }
 
 // Get returns the live table, creating it from the store row on first hit.
