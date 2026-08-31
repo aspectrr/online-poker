@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
@@ -88,6 +90,52 @@ func TestValidate_AcceptsGoodToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	if uid != "11111111-1111-1111-1111-111111111111" {
+		t.Fatalf("uid = %q", uid)
+	}
+}
+
+func TestValidate_AcceptsES256SigningKey(t *testing.T) {
+	// Supabase JWT signing keys: EC P-256 key in JWKS, aud "authenticated".
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jwksServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{
+			"keys": []map[string]string{{
+				"kid": "ec-key",
+				"kty": "EC",
+				"crv": "P-256",
+				"use": "sig",
+				"alg": "ES256",
+				"x":   base64.RawURLEncoding.EncodeToString(key.X.Bytes()),
+				"y":   base64.RawURLEncoding.EncodeToString(key.Y.Bytes()),
+			}},
+		})
+	}))
+	defer jwksServer.Close()
+
+	v, err := New(jwksServer.URL, "test-anon-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims := jwt.RegisteredClaims{
+		Issuer:    jwksServer.URL + "/auth/v1",
+		Audience:  jwt.ClaimStrings{"authenticated"},
+		Subject:   "22222222-2222-2222-2222-222222222222",
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	tok.Header["kid"] = "ec-key"
+	signed, err := tok.SignedString(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	uid, err := v.Validate(signed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if uid != claims.Subject {
 		t.Fatalf("uid = %q", uid)
 	}
 }

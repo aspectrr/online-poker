@@ -6,7 +6,7 @@ import { cn } from "../../lib/cn";
 
 /**
  * Read-only table settings slide-over: the active config (RIT, 7-2, bomb
- * pot, timeouts). In manual bomb-pot mode it also exposes the arm button.
+ * pot, timeouts). With bomb pots enabled it also exposes the arm button.
  */
 export function SettingsDrawer(props: {
   open: boolean;
@@ -84,7 +84,7 @@ export function SettingsDrawer(props: {
             </Show>
           </div>
 
-          <Show when={props.cfg.bombPotMode === "manual" && !props.bombPotLive}>
+          <Show when={props.cfg.bombPotMode !== "off" && !props.bombPotLive}>
             <div class="border-t border-line px-4 py-3">
               <Button
                 class="w-full"

@@ -57,7 +57,7 @@ export function CardsPage() {
             <span class="grid size-8 place-items-center rounded-btn bg-accent-tint text-accent">
               <Logo class="size-5" />
             </span>
-            <span class="font-display text-base font-bold tracking-tight text-fg">riverrats</span>
+            <span class="font-display text-base font-bold tracking-tight text-fg">River Rats</span>
           </A>
           <span class="rounded-pill border border-line bg-surface px-2.5 py-0.5 text-xs font-medium text-fg-muted">
             /cards · ASPTR-195

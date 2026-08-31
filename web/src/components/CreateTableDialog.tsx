@@ -15,7 +15,7 @@ import {
 } from "../lib/types";
 import { cn } from "../lib/cn";
 
-const RANKS = ["any", "A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2"] as const;
+const RANKS = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2"] as const;
 const SUITS = [
   { value: "any", label: "Any suit", glyph: "♢" },
   { value: "s", label: "Spades", glyph: "♠" },
@@ -31,10 +31,8 @@ const SUIT_COLOR: Record<string, string> = {
   any: "text-fg-muted",
 };
 
-const DEFAULT_TRIGGER = { rank: "any", suit: "any" };
-function suitName(suit: string): string {
-  return SUITS.find((s) => s.value === suit)?.label.replace(" suit", "") ?? "any suit";
-}
+const DEFAULT_TRIGGER = { rank: "2", suits: [] as string[] };
+const SUIT_GLYPH: Record<string, string> = { s: "♠", h: "♥", d: "♦", c: "♣" };
 
 export function CreateTableDialog(props: { onCreated: () => void }) {
   const [open, setOpen] = createSignal(false);
@@ -42,6 +40,9 @@ export function CreateTableDialog(props: { onCreated: () => void }) {
   const [saving, setSaving] = createSignal(false);
   const set = (patch: Partial<TableConfig>) => setConfig((c) => ({ ...c, ...patch }));
   const [trigger, setTrigger] = createSignal({ ...DEFAULT_TRIGGER });
+  // Starting stack entry unit: big blinds or dollars (server always stores bb).
+  const [stackUsd, setStackUsd] = createSignal(false);
+  const stackUsdValue = () => +((config().startingStackBb * config().bigBlindCents) / 100).toFixed(2);
   // keep trigger mirrored into config so submit serializes it
 
   const submit = async (e: SubmitEvent) => {
@@ -101,41 +102,80 @@ export function CreateTableDialog(props: { onCreated: () => void }) {
             </Field>
             <Field
               label="Starting stack"
-              hint={`${config().startingStackBb}bb = ${money(config().startingStackBb * config().bigBlindCents)}`}
+              hint={stackUsd()
+                ? `= ${config().startingStackBb}bb`
+                : `= ${money(config().startingStackBb * config().bigBlindCents)}`}
             >
-              <Select
-                options={[50, 100, 200].map((bb) => ({ value: String(bb), label: `${bb} bb` }))}
-                value={String(config().startingStackBb)}
-                onChange={(v) => set({ startingStackBb: Number(v) })}
-              />
+              <div class="flex gap-2">
+                <Input
+                  type="number"
+                  min={stackUsd() ? 0.01 : 1}
+                  step={stackUsd() ? 0.01 : 1}
+                  required
+                  class="flex-1"
+                  value={stackUsd() ? stackUsdValue() : config().startingStackBb}
+                  onInput={(e) => {
+                    const n = Number(e.currentTarget.value);
+                    if (!n) return;
+                    set({
+                      startingStackBb: stackUsd()
+                        ? Math.max(1, Math.round((n * 100) / config().bigBlindCents))
+                        : Math.max(1, Math.round(n)),
+                    });
+                  }}
+                />
+                <div class="flex overflow-hidden rounded-btn border border-line" role="radiogroup" aria-label="Stack unit">
+                  <For each={[{ u: false, label: "bb" }, { u: true, label: "$" }]}>
+                    {({ u, label }) => (
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={stackUsd() === u}
+                        onClick={() => setStackUsd(u)}
+                        class={cn(
+                          "px-3 text-sm font-semibold transition-colors",
+                          stackUsd() === u
+                            ? "bg-accent text-accent-fg"
+                            : "bg-surface text-fg-muted hover:bg-surface-raised",
+                        )}
+                      >
+                        {label}
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </div>
             </Field>
           </div>
 
           <div class="grid grid-cols-2 gap-4">
-            <Field label="Small blind">
+            <Field label="Small blind ($)">
               <Input
                 type="number"
-                min={1}
-                step={1}
+                min={0.01}
+                step={0.01}
                 required
-                value={config().smallBlindCents}
-                onInput={(e) => set({ smallBlindCents: Number(e.currentTarget.value) || 0 })}
+                value={config().smallBlindCents / 100}
+                onInput={(e) =>
+                  set({ smallBlindCents: Math.round(Number(e.currentTarget.value) * 100) || 0 })
+                }
               />
             </Field>
-            <Field label="Big blind">
+            <Field label="Big blind ($)">
               <Input
                 type="number"
-                min={2}
-                step={1}
+                min={0.01}
+                step={0.01}
                 required
-                value={config().bigBlindCents}
-                onInput={(e) => set({ bigBlindCents: Number(e.currentTarget.value) || 0 })}
+                value={config().bigBlindCents / 100}
+                onInput={(e) =>
+                  set({ bigBlindCents: Math.round(Number(e.currentTarget.value) * 100) || 0 })
+                }
               />
             </Field>
           </div>
           <p class="-mt-3 text-xs text-fg-muted">
-            Blinds in cents — currently {money(config().smallBlindCents)}/
-            {money(config().bigBlindCents)}
+            Currently {money(config().smallBlindCents)}/{money(config().bigBlindCents)} per hand
           </p>
 
           <div class="grid grid-cols-2 gap-x-6 gap-y-1">
@@ -200,15 +240,15 @@ export function CreateTableDialog(props: { onCreated: () => void }) {
               <Select
                 options={[
                   { value: "off", label: "Off" },
-                  { value: "every_hand", label: "Manual (arm in table settings)" },
-                  { value: "trigger", label: "Card trigger" },
+                  { value: "trigger", label: "Card trigger + manual arm" },
+                  { value: "every_hand", label: "Manual only (arm in table settings)" },
                 ]}
                 value={config().bombPotMode}
                 onChange={(v) => set({ bombPotMode: v as BombPotMode })}
               />
             </Field>
             <Show when={config().bombPotMode === "trigger"}>
-              <div class="grid grid-cols-2 gap-4 rounded-lg bg-surface/60 p-3">
+              <div class="flex flex-col gap-3 rounded-lg bg-surface/60 p-3">
                 <Field label="Rank" class="gap-1">
                   <div class="flex flex-wrap gap-1" role="radiogroup" aria-label="Trigger rank">
                     <For each={RANKS}>
@@ -225,24 +265,43 @@ export function CreateTableDialog(props: { onCreated: () => void }) {
                               : "bg-surface-raised text-fg-muted hover:bg-line hover:text-fg",
                           )}
                         >
-                          {r === "any" ? "Any" : r}
+                          {r}
                         </button>
                       )}
                     </For>
                   </div>
                 </Field>
-                <Field label="Suit" class="gap-1">
-                  <div class="flex gap-1" role="radiogroup" aria-label="Trigger suit">
-                    <For each={SUITS}>
+                <Field label="Suits (multi-select)" class="gap-1">
+                  <div class="flex gap-1" role="group" aria-label="Trigger suits">
+                    <button
+                      type="button"
+                      aria-pressed={trigger().suits.length === 0}
+                      onClick={() => setTrigger((t) => ({ ...t, suits: [] }))}
+                      class={cn(
+                        "h-8 rounded-md px-2.5 text-sm font-semibold transition-colors",
+                        trigger().suits.length === 0
+                          ? "bg-accent text-accent-fg"
+                          : "bg-surface-raised text-fg-muted hover:bg-line hover:text-fg",
+                      )}
+                    >
+                      Any
+                    </button>
+                    <For each={SUITS.filter((s) => s.value !== "any")}>
                       {(s) => (
                         <button
                           type="button"
-                          role="radio"
-                          aria-checked={trigger().suit === s.value}
-                          onClick={() => setTrigger((t) => ({ ...t, suit: s.value }))}
+                          aria-pressed={trigger().suits.includes(s.value)}
+                          onClick={() =>
+                            setTrigger((t) => ({
+                              ...t,
+                              suits: t.suits.includes(s.value)
+                                ? t.suits.filter((x) => x !== s.value)
+                                : [...t.suits, s.value],
+                            }))
+                          }
                           class={cn(
                             "grid h-8 w-9 place-items-center rounded-md text-base transition-colors",
-                            trigger().suit === s.value
+                            trigger().suits.includes(s.value)
                               ? "bg-accent text-accent-fg"
                               : cn("bg-surface-raised hover:bg-line", SUIT_COLOR[s.value]),
                           )}
@@ -254,13 +313,14 @@ export function CreateTableDialog(props: { onCreated: () => void }) {
                     </For>
                   </div>
                 </Field>
-                <p class="col-span-2 text-xs text-fg-muted">
-                  Next hand is a bomb pot when a{" "}
+                <p class="text-xs text-fg-muted">
+                  Next hand is a bomb pot when{" "}
                   <span class="font-medium text-fg">
-                    {trigger().rank === "any" ? "any card" : `a ${trigger().rank}`}
+                    {trigger().suits.length
+                      ? `a ${trigger().suits.map((s) => `${trigger().rank}${SUIT_GLYPH[s]}`).join(" or ")}`
+                      : `any ${trigger().rank}`}
                   </span>{" "}
-                  of <span class="font-medium text-fg">{suitName(trigger().suit)}</span> hits the
-                  board.
+                  hits the board.
                 </p>
               </div>
             </Show>
@@ -276,16 +336,18 @@ export function CreateTableDialog(props: { onCreated: () => void }) {
             <Show when={config().sevenTwo}>
               <div class="grid grid-cols-2 items-end gap-4">
                 <Field
-                  label="Bounty"
+                  label="Bounty ($)"
                   hint={`from each player — ${money(config().sevenTwoBountyCents * 9)} total at 9 seats`}
                 >
                   <Input
                     type="number"
                     min={0}
-                    step={1}
-                    value={config().sevenTwoBountyCents}
+                    step={0.01}
+                    value={config().sevenTwoBountyCents / 100}
                     onInput={(e) =>
-                      set({ sevenTwoBountyCents: Number(e.currentTarget.value) || 0 })
+                      set({
+                        sevenTwoBountyCents: Math.round(Number(e.currentTarget.value) * 100) || 0,
+                      })
                     }
                   />
                 </Field>
