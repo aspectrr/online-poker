@@ -281,6 +281,9 @@ func main() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		if rows == nil {
+			rows = []store.GameTable{} // nil marshals as JSON null; clients expect []
+		}
 		writeJSON(w, http.StatusOK, rows)
 	}))
 
