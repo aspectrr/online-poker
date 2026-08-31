@@ -81,6 +81,7 @@ export function FeedbackDialog(props: { class?: string }) {
                         onClick={() => setRating(rating() === n ? 0 : n)}
                       >
                         <svg
+                          aria-hidden="true"
                           viewBox="0 0 24 24"
                           class={cn('size-5', n <= rating() ? 'fill-marigold stroke-marigold' : 'fill-none stroke-black/30')}
                           stroke-width="1.6"

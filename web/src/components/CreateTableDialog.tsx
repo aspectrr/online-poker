@@ -52,7 +52,7 @@ export function CreateTableDialog(props: { onCreated: () => void }) {
         as={Button}
         class="gap-1.5"
       >
-        <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+        <svg aria-hidden="true" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
           <path d="M12 5v14M5 12h14" />
         </svg>
         Create table

@@ -54,7 +54,7 @@ export function AuthPage() {
               fallback={
                 <div class="text-center">
                   <span class="mx-auto grid size-12 place-items-center rounded-pill bg-accent-tint text-accent">
-                    <svg class="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg aria-hidden="true" class="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M4 6h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" />
                       <path d="m22 10-10 5L2 10" stroke-linejoin="round" />
                     </svg>
@@ -70,6 +70,7 @@ export function AuthPage() {
               <h1 class="font-display text-lg font-semibold text-fg">Sign in to play</h1>
               <p class="mt-1 text-sm text-fg-muted">We’ll email you a one-time link. No passwords.</p>
               <form class="mt-5 flex flex-col gap-4" onSubmit={submit}>
+                {/* biome-ignore lint/a11y/noLabelWithoutControl: label wraps the custom Input, which renders a real text input */}
                 <label class="flex flex-col gap-1.5">
                   <span class="text-xs font-medium tracking-wide text-fg-muted uppercase">Email</span>
                   <Input

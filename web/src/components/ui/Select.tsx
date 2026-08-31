@@ -33,7 +33,7 @@ export function Select(props: SelectProps) {
         >
           <SelectPrimitive.ItemLabel>{itemProps.item.rawValue.label}</SelectPrimitive.ItemLabel>
           <SelectPrimitive.ItemIndicator>
-            <svg class="size-4 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <svg aria-hidden="true" class="size-4 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M20 6L9 17l-5-5" />
             </svg>
           </SelectPrimitive.ItemIndicator>
@@ -47,7 +47,7 @@ export function Select(props: SelectProps) {
           {(state) => <span class="truncate">{state.selectedOption()?.label ?? local.placeholder}</span>}
         </SelectPrimitive.Value>
         <SelectPrimitive.Icon class="flex-none text-fg-muted transition-transform duration-200 data-[expanded]:rotate-180">
-          <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg aria-hidden="true" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="m6 9 6 6 6-6" />
           </svg>
         </SelectPrimitive.Icon>
@@ -64,6 +64,7 @@ export function Select(props: SelectProps) {
 /** Labeled field wrapper used across forms. */
 export function Field(props: ParentProps<{ label: string; hint?: string; class?: string }>) {
   return (
+    // biome-ignore lint/a11y/noLabelWithoutControl: label wraps the control via props.children; rule can't see through the component
     <label class={cn('flex flex-col gap-1.5 text-sm', props.class)}>
       <span class="text-xs font-medium tracking-wide text-fg-muted uppercase">{props.label}</span>
       {props.children}

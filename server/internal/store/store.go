@@ -22,18 +22,18 @@ type BombPotTrigger struct {
 
 // TableConfig is the game_tables.config jsonb payload.
 type TableConfig struct {
-	BlindsSBBB        []int64           `json:"blinds_sb_bb"`     // [sb, bb] in cents
-	StartingStackBB   int               `json:"starting_stack_bb"`
-	ActionTimeoutS    int               `json:"action_timeout_s"`
-	InterHandDelayS   int               `json:"inter_hand_delay_s"`
-	RIT               string            `json:"rit"`               // never | always
-	RabbitHunt        bool              `json:"rabbit_hunt"`
-	BombPotMode       string            `json:"bomb_pot_mode"`     // off | manual | trigger
-	BombPotAntes      int64             `json:"bomb_pot_antes"`
-	BombPotTriggers   []BombPotTrigger  `json:"bomb_pot_triggers"`
-	SevenDeuce        bool              `json:"seven_deuce"`
-	SevenDeuceBounty  int64             `json:"seven_deuce_bounty"`
-	MaxSeats          int               `json:"max_seats"`
+	BlindsSBBB       []int64          `json:"blinds_sb_bb"` // [sb, bb] in cents
+	StartingStackBB  int              `json:"starting_stack_bb"`
+	ActionTimeoutS   int              `json:"action_timeout_s"`
+	InterHandDelayS  int              `json:"inter_hand_delay_s"`
+	RIT              string           `json:"rit"` // never | always
+	RabbitHunt       bool             `json:"rabbit_hunt"`
+	BombPotMode      string           `json:"bomb_pot_mode"` // off | manual | trigger
+	BombPotAntes     int64            `json:"bomb_pot_antes"`
+	BombPotTriggers  []BombPotTrigger `json:"bomb_pot_triggers"`
+	SevenDeuce       bool             `json:"seven_deuce"`
+	SevenDeuceBounty int64            `json:"seven_deuce_bounty"`
+	MaxSeats         int              `json:"max_seats"`
 }
 
 // Validate checks config invariants. Defaults applied for zero fields

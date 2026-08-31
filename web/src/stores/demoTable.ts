@@ -114,7 +114,9 @@ export function createDemoTable(tableId: string): TableStore {
     const total = state.seats.reduce((a, s) => a + s.betCents, 0)
     if (total) {
       setState('potCents', state.potCents + total)
-      state.seats.forEach((_, i) => setState('seats', i, 'betCents', 0))
+      state.seats.forEach((_, i) => {
+        setState('seats', i, 'betCents', 0)
+      })
     }
   }
   const clearTurn = () => { setState('toAct', -1); setState('deadlineUnixMs', null); setState('legal', null) }
@@ -186,7 +188,9 @@ export function createDemoTable(tableId: string): TableStore {
         setState('street', s.street)
         setState('board', { street: s.street, boards: [s.board] })
         setState('message', s.text)
-        state.seats.forEach((_, i) => setState('seats', i, 'lastAction', ''))
+        state.seats.forEach((_, i) => {
+          setState('seats', i, 'lastAction', '')
+        })
         cursor++; advance(1000)
         break
       case 'villain': {

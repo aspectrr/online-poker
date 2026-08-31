@@ -37,6 +37,8 @@ export function SettingsDrawer(props: {
   return (
     <Show when={props.open}>
       <div class="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="Table settings">
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: pointer shortcut only; close button and Escape path live in the drawer */}
+        {/* biome-ignore lint/a11y/useKeyWithClickEvents: see above */}
         <div class="absolute inset-0 bg-black/40" onClick={props.onClose} />
         <div class="absolute inset-y-0 right-0 flex w-80 max-w-[85vw] flex-col border-l border-line bg-surface shadow-2xl animate-in-left">
           <div class="flex items-center justify-between border-b border-line px-4 py-3">

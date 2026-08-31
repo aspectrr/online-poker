@@ -264,9 +264,10 @@ func (t *Table) syncSeats() {
 
 // persistHand: write hand history jsonb. Shape (consumed by the web history
 // viewer, web/src/lib/history.ts):
-//   hand_no, bomb_pot, button, start_stacks [{seat,player,stack}],
-//   holes [{seat,cards}] (all revealed — history), events [engine events],
-//   stacks [{seat,player,stack}] (final).
+//
+//	hand_no, bomb_pot, button, start_stacks [{seat,player,stack}],
+//	holes [{seat,cards}] (all revealed — history), events [engine events],
+//	stacks [{seat,player,stack}] (final).
 func (t *Table) persistHand() {
 	if t.persist == nil || t.runner == nil || t.persistedNo == t.handNo {
 		return

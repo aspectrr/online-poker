@@ -73,7 +73,10 @@ export function reviewHand(row: HandRow): HandReview {
   for (const ev of d.events ?? []) {
     const lines = () => {
       let l = byStreet.get(ev.street ?? '')
-      if (!l) byStreet.set((ev.street ?? ''), (l = []))
+      if (!l) {
+        l = []
+        byStreet.set(ev.street ?? '', l)
+      }
       return l
     }
     switch (ev.type) {
@@ -109,7 +112,10 @@ export function reviewHand(row: HandRow): HandReview {
   for (const ev of d.events ?? []) {
     if (ev.type !== 'street_dealt') continue
     let list = boards.get(ev.board_index ?? 0)
-    if (!list) boards.set(ev.board_index ?? 0, (list = []))
+    if (!list) {
+      list = []
+      boards.set(ev.board_index ?? 0, list)
+    }
     list.push({ street: ev.street ?? '', cards: (ev.cards ?? []).map(toUICard) })
   }
   const boardRows: BoardRow[] = [...boards].map(([idx, streets]) => ({

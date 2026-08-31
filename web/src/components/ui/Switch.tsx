@@ -34,6 +34,7 @@ export function Switch(props: SwitchProps) {
 export function SwitchRow(props: { label: string; description?: string; class?: string } & SwitchProps) {
   const [local, others] = splitProps(props, ['label', 'description', 'class'])
   return (
+    // biome-ignore lint/a11y/noLabelWithoutControl: label wraps the Kobalte Switch, which renders a real checkbox input
     <label class={cn('flex items-center justify-between gap-4', local.class)}>
       <span class="flex flex-col">
         <span class="text-sm font-medium text-fg">{local.label}</span>

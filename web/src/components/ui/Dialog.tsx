@@ -62,7 +62,7 @@ export function DialogContent(props: DialogContentProps) {
             class="rounded-md p-1 text-fg-muted transition-colors duration-200 hover:bg-surface-raised hover:text-fg"
             aria-label="Close dialog"
           >
-            <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <svg aria-hidden="true" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
           </DialogPrimitive.CloseButton>
