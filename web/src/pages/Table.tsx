@@ -16,6 +16,7 @@ import { Seat } from "../components/table/Seat";
 import { ChipStack } from "../components/table/ChipStack";
 import { JoinModal } from "../components/table/JoinModal";
 import { TableCenter } from "../components/table/TableCenter";
+import { TableMobile } from "../components/table/TableMobile";
 import { ActionBar } from "../components/table/ActionBar";
 import { SettingsDrawer } from "../components/table/SettingsDrawer";
 import { HistoryDrawer } from "../components/table/HistoryDrawer";
@@ -107,6 +108,21 @@ function useClock() {
   return now;
 }
 
+/** Compact (phone) layout when the felt design box can't stay readable:
+ *  narrow viewports, or short ones where the scaled felt would shrink text
+ *  past ~6px (large-phone landscape). Desktop/tablet keep the felt. */
+function useCompact() {
+  const [compact, setCompact] = createSignal(false);
+  onMount(() => {
+    const mq = window.matchMedia("(max-width: 639px), (max-height: 559px)");
+    const update = () => setCompact(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    onCleanup(() => mq.removeEventListener("change", update));
+  });
+  return compact;
+}
+
 export function TablePage() {
   const params = useParams();
   const location = useLocation();
@@ -120,6 +136,7 @@ export function TablePage() {
   const now = useClock();
 
   const t = () => store.state;
+  const compact = useCompact();
   const positions = () => SEAT_POS[Math.min(t().maxSeats, 9)] ?? SEAT_POS[6];
 
   const deadline = () => t().deadlineUnixMs;
@@ -151,6 +168,9 @@ export function TablePage() {
     measure();
     window.addEventListener("resize", measure);
     onCleanup(() => window.removeEventListener("resize", measure));
+    // the felt box only exists outside the compact layout — re-measure when
+    // crossing the breakpoint (rotation) once it mounts
+    createEffect(on(compact, () => queueMicrotask(measure)));
   });
 
   const [drawerOpen, setDrawerOpen] = createSignal(false);
@@ -206,17 +226,23 @@ export function TablePage() {
           <A href="/" class="text-sm font-medium text-fg-muted transition-colors hover:text-fg">
             ← lobby
           </A>
-          <span class="font-display text-sm font-bold text-fg">{t().name}</span>
-          <span class="rounded bg-surface-raised px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-fg-muted">
+          <span class="max-w-28 truncate font-display text-sm font-bold text-fg min-[640px]:max-w-none">
+            {t().name}
+          </span>
+          <span class="hidden rounded bg-surface-raised px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-fg-muted min-[640px]:inline">
             {t().gameType}
           </span>
-          <span class="text-xs tabular-nums text-fg-muted">{blinds(t().sbCents, t().bbCents)}</span>
+          <span class="hidden text-xs tabular-nums text-fg-muted min-[640px]:inline">
+            {blinds(t().sbCents, t().bbCents)}
+          </span>
         </div>
         <div class="flex items-center gap-3">
           <span class="text-xs tabular-nums text-fg-muted">
-            <Show when={t().handNo > 0}>hand #{t().handNo} · </Show>
+            <Show when={t().handNo > 0}>
+              <span class="min-[420px]:inline hidden">hand #{t().handNo} · </span>
+            </Show>
             <Show when={t().bombPot}>
-              <span class="font-bold text-accent">BOMB POT · </span>
+              <span class="font-bold text-accent">BOMB · </span>
             </Show>
             {t().street}
           </span>
@@ -327,7 +353,7 @@ export function TablePage() {
               </div>
             }
           >
-            <div class="animate-in-pop rounded-xl border border-danger/70 bg-surface/95 px-4 py-2 text-center shadow-lg">
+            <div class="animate-in-pop rounded-xl border border-danger/70 bg-surface/95 px-4 py-2 text-center shadow-lg [@media(max-width:639px)]:hidden [@media(max-height:559px)]:hidden">
               <div class="text-sm font-bold tracking-wide text-danger">
                 DOUBLE BOARD PLO BOMB POT
               </div>
@@ -337,105 +363,123 @@ export function TablePage() {
         </div>
       </Show>
 
-      {/* table area — design box scaled to fit, seats stay overlap-free at any size */}
-      <main class="relative flex min-h-0 flex-1 items-center justify-center p-3 sm:p-6">
-        <div ref={hostBox} class="grid h-full w-full place-items-center">
-          <div
-            class="relative"
-            style={{
-              width: `${DESIGN_W * scale()}px`,
-              height: `${(DESIGN_H + SEAT_OVERHANG) * scale()}px`,
-            }}
-          >
-            <div
-              class="absolute left-0 top-0 origin-top-left"
-              style={{
-                width: `${DESIGN_W}px`,
-                height: `${DESIGN_H}px`,
-                transform: `scale(${scale()})`,
-              }}
-            >
-              {/* rail */}
-              <div class="absolute inset-0 rounded-[999px_/280px] rounded-[50%] border border-[#3a2b1d] bg-gradient-to-b from-[#4a3626] via-[#33241a] to-[#221810] p-[14px] shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7),inset_0_2px_2px_rgba(255,255,255,0.08)]">
-                {/* felt */}
+      {/* table area — phones get the compact layout; desktop/tablet the felt design box */}
+      <main class="relative flex min-h-0 flex-1 items-center justify-center p-2 sm:p-6">
+        <Show
+          when={compact()}
+          fallback={
+            <div ref={hostBox} class="grid h-full w-full place-items-center">
+              <div
+                class="relative"
+                style={{
+                  width: `${DESIGN_W * scale()}px`,
+                  height: `${(DESIGN_H + SEAT_OVERHANG) * scale()}px`,
+                }}
+              >
                 <div
-                  class="relative h-full w-full overflow-hidden rounded-[50%] border border-black/50 shadow-[inset_0_0_60px_rgba(0,0,0,0.55)]"
-                  style="background: radial-gradient(ellipse 75% 70% at 50% 42%, #1f6f4a 0%, #175a3c 45%, #0f4530 75%, #0b3625 100%)"
+                  class="absolute left-0 top-0 origin-top-left"
+                  style={{
+                    width: `${DESIGN_W}px`,
+                    height: `${DESIGN_H}px`,
+                    transform: `scale(${scale()})`,
+                  }}
                 >
-                  {/* subtle felt texture + inner ring */}
-                  <div
-                    class="absolute inset-0 opacity-[0.05]"
-                    style="background-image: repeating-linear-gradient(45deg, #fff 0 1px, transparent 1px 3px), repeating-linear-gradient(-45deg, #fff 0 1px, transparent 1px 3px)"
-                  />
-                  <div class="absolute inset-[7%] rounded-[50%] border border-white/10" />
+                  {/* rail */}
+                  <div class="absolute inset-0 rounded-[999px_/280px] rounded-[50%] border border-[#3a2b1d] bg-gradient-to-b from-[#4a3626] via-[#33241a] to-[#221810] p-[14px] shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7),inset_0_2px_2px_rgba(255,255,255,0.08)]">
+                    {/* felt */}
+                    <div
+                      class="relative h-full w-full overflow-hidden rounded-[50%] border border-black/50 shadow-[inset_0_0_60px_rgba(0,0,0,0.55)]"
+                      style="background: radial-gradient(ellipse 75% 70% at 50% 42%, #1f6f4a 0%, #175a3c 45%, #0f4530 75%, #0b3625 100%)"
+                    >
+                      {/* subtle felt texture + inner ring */}
+                      <div
+                        class="absolute inset-0 opacity-[0.05]"
+                        style="background-image: repeating-linear-gradient(45deg, #fff 0 1px, transparent 1px 3px), repeating-linear-gradient(-45deg, #fff 0 1px, transparent 1px 3px)"
+                      />
+                      <div class="absolute inset-[7%] rounded-[50%] border border-white/10" />
 
-                  <TableCenter table={t()} dealKey={`${t().handNo}`} />
+                      <TableCenter table={t()} dealKey={`${t().handNo}`} />
+                    </div>
+                  </div>
+
+                  {/* seats */}
+                  <For each={t().seats}>
+                    {(seat) => {
+                      const [fx, fy] = positions()[seat.seat] ?? [0.5, 0.5];
+                      const canJoin = () =>
+                        t().heroSeat < 0 && !seat.player && store.status === "open";
+                      return (
+                        <Seat
+                          seat={seat}
+                          table={t()}
+                          msLeft={msLeftFor(seat.seat)}
+                          frac={fracFor(seat.seat)}
+                          isHero={seat.seat === t().heroSeat}
+                          dealt={t().dealt[seat.seat] ?? 0}
+                          dealDx={(0.5 - fx) * DESIGN_W}
+                          dealDy={(0.5 - fy) * DESIGN_H}
+                          landing={t().landingSeat === seat.seat}
+                          peeking={seat.seat === t().heroSeat ? peeking() : undefined}
+                          onPeekChange={seat.seat === t().heroSeat ? setPeeking : undefined}
+                          onJoin={canJoin() ? () => openJoinAt(seat.seat) : undefined}
+                          style={`left:${fx * 100}%; top:${fy * 100}%`}
+                        />
+                      );
+                    }}
+                  </For>
+
+                  {/* dealer button: glides seat-to-seat around the rail */}
+                  <Show when={t().buttonSeat >= 0}>
+                    <DealerButton seat={t().buttonSeat} positions={positions()} />
+                  </Show>
+
+                  {/* felt chips: player stacks + street bets on the inner ring */}
+                  <For each={t().seats}>
+                    {(seat) => {
+                      if (!seat.player) return null;
+                      const p = positions()[seat.seat] ?? [0.5, 0.5];
+                      const stackPos: [number, number] = [
+                        0.5 + (p[0] - 0.5) * 0.72,
+                        0.5 + (p[1] - 0.5) * 0.72,
+                      ];
+                      const betPos: [number, number] = [
+                        0.5 + (p[0] - 0.5) * 0.5,
+                        0.5 + (p[1] - 0.5) * 0.5,
+                      ];
+                      return (
+                        <>
+                          <FeltChips pos={stackPos} cents={seat.stackCents} />
+                          <BetChips pos={betPos} from={stackPos} bet={seat.betCents} />
+                        </>
+                      );
+                    }}
+                  </For>
+
+                  {/* chips flying to winner */}
+                  <For each={winners()}>
+                    {(w) => <ChipFly toSeat={positions()[w.seat] ?? [0.5, 0.5]} />}
+                  </For>
                 </div>
               </div>
-
-              {/* seats */}
-              <For each={t().seats}>
-                {(seat) => {
-                  const [fx, fy] = positions()[seat.seat] ?? [0.5, 0.5];
-                  const canJoin = () => t().heroSeat < 0 && !seat.player && store.status === "open";
-                  return (
-                    <Seat
-                      seat={seat}
-                      table={t()}
-                      msLeft={msLeftFor(seat.seat)}
-                      frac={fracFor(seat.seat)}
-                      isHero={seat.seat === t().heroSeat}
-                      dealt={t().dealt[seat.seat] ?? 0}
-                      dealDx={(0.5 - fx) * DESIGN_W}
-                      dealDy={(0.5 - fy) * DESIGN_H}
-                      landing={t().landingSeat === seat.seat}
-                      peeking={seat.seat === t().heroSeat ? peeking() : undefined}
-                      onPeekChange={seat.seat === t().heroSeat ? setPeeking : undefined}
-                      onJoin={canJoin() ? () => openJoinAt(seat.seat) : undefined}
-                      style={`left:${fx * 100}%; top:${fy * 100}%`}
-                    />
-                  );
-                }}
-              </For>
-
-              {/* dealer button: glides seat-to-seat around the rail */}
-              <Show when={t().buttonSeat >= 0}>
-                <DealerButton seat={t().buttonSeat} positions={positions()} />
-              </Show>
-
-              {/* felt chips: player stacks + street bets on the inner ring */}
-              <For each={t().seats}>
-                {(seat) => {
-                  if (!seat.player) return null;
-                  const p = positions()[seat.seat] ?? [0.5, 0.5];
-                  const stackPos: [number, number] = [
-                    0.5 + (p[0] - 0.5) * 0.72,
-                    0.5 + (p[1] - 0.5) * 0.72,
-                  ];
-                  const betPos: [number, number] = [
-                    0.5 + (p[0] - 0.5) * 0.5,
-                    0.5 + (p[1] - 0.5) * 0.5,
-                  ];
-                  return (
-                    <>
-                      <FeltChips pos={stackPos} cents={seat.stackCents} />
-                      <BetChips pos={betPos} from={stackPos} bet={seat.betCents} />
-                    </>
-                  );
-                }}
-              </For>
-
-              {/* chips flying to winner */}
-              <For each={winners()}>
-                {(w) => <ChipFly toSeat={positions()[w.seat] ?? [0.5, 0.5]} />}
-              </For>
             </div>
+          }
+        >
+          <div class="h-full w-full">
+            <TableMobile
+              table={t()}
+              joinable={store.status === "open" && t().heroSeat < 0}
+              peeking={peeking()}
+              onPeekChange={setPeeking}
+              onTakeSeat={(s) => (s != null ? openJoinAt(s) : setSpectating(false))}
+              msLeftFor={msLeftFor}
+              fracFor={fracFor}
+            />
           </div>
-        </div>
+        </Show>
       </main>
 
-      {/* action bar + feedback (ASPTR-192) */}
-      <footer class="relative flex-none px-3 pb-3 sm:px-6 sm:pb-4 [@media(max-height:520px)]:px-2 [@media(max-height:520px)]:pb-2">
+      {/* action bar + feedback (ASPTR-192); safe-area padding for notched phones */}
+      <footer class="relative flex-none px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
         <ActionBar table={t()} send={(a) => store.send(a)} error={store.lastError} />
         <div class="absolute bottom-1 right-3 sm:right-6">
           <FeedbackDialog />

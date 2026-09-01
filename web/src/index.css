@@ -100,6 +100,22 @@ body {
   font-family: var(--font-sans);
   font-feature-settings: "lnum" 1;
   -webkit-font-smoothing: antialiased;
+  /* phone play: no pull-to-refresh or rubber-band mid-hand */
+  overscroll-behavior-y: none;
+}
+
+/* fast taps: kill the double-tap zoom delay on game controls */
+button,
+[role="button"] {
+  touch-action: manipulation;
+}
+
+/* horizontal chip strips on phones: scroll without the scrollbar chrome */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 ::selection {

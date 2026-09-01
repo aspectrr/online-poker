@@ -11,7 +11,7 @@ import { cn } from "../../lib/cn";
  * indicator and a win ring when that board's pot was awarded. Board cards
  * are keyed by object identity in the store, so only NEW cards animate.
  */
-export function TableCenter(props: { table: TableState; dealKey: string }) {
+export function TableCenter(props: { table: TableState; dealKey: string; class?: string }) {
   const t = () => props.table;
   const boards = () => t().board.boards;
   const isDouble = () => boards().length > 1;
@@ -20,7 +20,12 @@ export function TableCenter(props: { table: TableState; dealKey: string }) {
   const halfPot = () => Math.round(t().potCents / 2);
 
   return (
-    <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3">
+    <div
+      class={cn(
+        "pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3",
+        props.class,
+      )}
+    >
       {/* pot: chip stack scales with size */}
       <Show when={t().potCents > 0 || boards()[0].length > 0}>
         <div class="flex items-center gap-2 rounded-full border border-accent/25 bg-black/35 px-3.5 py-1 shadow-lg shadow-black/30 backdrop-blur-[2px]">
