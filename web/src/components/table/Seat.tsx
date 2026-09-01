@@ -3,6 +3,7 @@ import { money } from "../../lib/money";
 import type { SeatState, TableState } from "../../lib/tableTypes";
 import { CardRow } from "../cards/CardRow";
 import { Card } from "../cards/Card";
+import { HeroHand } from "../cards/HeroHand";
 import { cn } from "../../lib/cn";
 
 /** Countdown ring color shifts to danger under 5s. */
@@ -90,44 +91,15 @@ export function Seat(props: {
             </Show>
           }
         >
-          <div
-            role="button"
-            tabindex={0}
-            aria-pressed={!!props.peeking}
-            aria-label="Hold to peek at your cards"
-            class={cn(
-              "flex -space-x-6 select-none",
-              canPeek() &&
-                "cursor-pointer touch-none rounded-lg focus-visible:outline-2 focus-visible:outline-accent",
-              props.peeking && "animate-peek",
-            )}
-            style={dealVars()}
-            onPointerDown={(e) => {
-              if (canPeek()) {
-                e.preventDefault();
-                props.onPeekChange!(true);
-              }
-            }}
-            onPointerUp={() => props.onPeekChange?.(false)}
-            onPointerLeave={() => props.onPeekChange?.(false)}
-            onPointerCancel={() => props.onPeekChange?.(false)}
-            onContextMenu={(e) => canPeek() && e.preventDefault()}
-            onKeyDown={(e) => {
-              if (canPeek() && (e.key === " " || e.key === "Enter")) {
-                e.preventDefault();
-                props.onPeekChange!(true);
-              }
-            }}
-            onKeyUp={() => props.onPeekChange?.(false)}
-          >
-            <For each={heroShown()!}>
-              {(card) => (
-                <div class="animate-deal-seat">
-                  <CardRow cards={[card]} size="sm" revealed={heroRevealed()} />
-                </div>
-              )}
-            </For>
-          </div>
+          <HeroHand
+            cards={heroShown()!}
+            revealed={heroRevealed()}
+            interactive={canPeek()}
+            peeking={props.peeking}
+            onPeekChange={props.onPeekChange}
+            dealDx={props.dealDx}
+            dealDy={props.dealDy}
+          />
         </Show>
       </Show>
 

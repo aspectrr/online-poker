@@ -103,6 +103,14 @@ func (t *Table) startHand() {
 	}
 	if err != nil {
 		log.Printf("table %s: start hand: %v", t.row.ID, err)
+		// Don't wedge the table: the button can land on an empty/zero-stack
+		// seat (fresh table, sitting-out players). Advance it and retry once.
+		if nb := t.nextButton(); nb != t.button {
+			t.button = nb
+			t.nextHand = time.AfterFunc(time.Second, func() {
+				t.Send(nil, protocol.ClientMsg{Type: "__start_hand"})
+			})
+		}
 		return
 	}
 	if bombPot {
