@@ -64,9 +64,18 @@ func (t *Table) startHand() {
 		bombPot = true
 		t.forceBombPot = false
 	}
+	texasDrop := false
+	if t.forceTexasDrop {
+		texasDrop = true
+		bombPot = false // an also-armed bomb pot is consumed by the drop game
+		t.forceBombPot = false
+		t.forceTexasDrop = false
+	}
 	cfg := t.cfg
 	cfg.BombPot = bombPot
+	cfg.TexasDrop = texasDrop
 	t.bombPot = bombPot
+	t.texasDrop = texasDrop
 	cfg.ButtonSeat = t.button
 	cfg.HandID = t.handNo + 1
 
@@ -115,6 +124,9 @@ func (t *Table) startHand() {
 	}
 	if bombPot {
 		log.Printf("table %s hand %d: BOMB POT (trigger matched)", t.row.ID, cfg.HandID)
+	}
+	if texasDrop {
+		log.Printf("table %s hand %d: TEXAS DROP (ante %d)", t.row.ID, cfg.HandID, cfg.TexasDropAnte)
 	}
 	t.runner = r
 	t.handNo = cfg.HandID
@@ -179,6 +191,13 @@ func (t *Table) afterAdvance() {
 		}
 		t.armTimeout(la)
 	}
+
+	// Texas Drop decision phase: one timer per round auto-drops anyone who
+	// hasn't chosen when it fires (LegalActionsFor is nil here, so the
+	// betting timeout never arms).
+	if round, _, ok := r.DropDecidePending(); ok {
+		t.armDropTimeout(round)
+	}
 }
 
 // postHandOffered: engine paused between pot_awarded and hand_ended for
@@ -227,15 +246,31 @@ func firstTriggerMatch(triggers []engine.CardTrigger, cards []engine.Card) (engi
 func (t *Table) handEnded() {
 	// advance button to next occupied seat
 	t.button = t.nextButton()
+	var lastDealt []engine.Card
+	wasTexasDrop := t.texasDrop
 	if t.runner != nil {
-		t.lastDealt = t.runner.DealtCards() // for the next hand's bomb-pot triggers
+		lastDealt = t.runner.DealtCards() // for the next hand's bomb-pot triggers
 	}
 	t.runner = nil
 	t.pending = nil
 	t.bombPot = false
+	t.texasDrop = false
+	if t.dropTimer != nil {
+		t.dropTimer.Stop()
+		t.dropTimer = nil
+	}
+	t.dropTimerRound = 0
+	// a drop game deals whole extra decks (fresh board per round) — those
+	// cards would fire bomb-pot triggers nearly every time; don't feed them
+	// into the next hand's trigger match
+	if !wasTexasDrop {
+		t.lastDealt = lastDealt
+	}
 	// banner for trigger-armed bomb pots: everyone sees it during the
 	// inter-hand delay; startHand re-matches and consumes lastDealt itself.
-	if !t.forceBombPot && len(t.lastDealt) > 0 && len(t.cfg.BombPotCardTriggers) > 0 {
+	// Skipped when a drop game is armed — drop wins the next hand and the
+	// bomb-pot banner would just contradict it.
+	if !t.forceBombPot && !t.forceTexasDrop && len(t.lastDealt) > 0 && len(t.cfg.BombPotCardTriggers) > 0 {
 		if c, ok := firstTriggerMatch(t.cfg.BombPotCardTriggers, t.lastDealt); ok {
 			t.broadcastEvent(protocol.Event{Type: protocol.EvBombPotArmed, Cards: []engine.Card{c}})
 		}
@@ -290,6 +325,7 @@ func (t *Table) persistHand() {
 	hist := map[string]any{
 		"hand_no":      t.handNo,
 		"bomb_pot":     t.bombPot,
+		"texas_drop":   t.texasDrop,
 		"button":       t.button,
 		"start_stacks": t.handStart,
 		"holes":        holes,
@@ -318,6 +354,15 @@ func (t *Table) publishEvents(evs []protocol.Event) {
 		t.applyEventToSeats(&ev)
 		if ev.Type == protocol.EvPotAwarded && len(ev.Winners) > 0 {
 			t.lastWinner = ev.Winners[0].Seat
+		}
+		if ev.Type == protocol.EvDropDecided {
+			// stay/drop ack: private to the decider — choices are secret
+			// until the round-wide reveal
+			if s := t.seatByNo(ev.Seat); s != nil && s.conn != nil {
+				out := ev
+				s.conn.TrySend(protocol.ServerMsg{Type: "event", Event: &out})
+			}
+			continue
 		}
 		if ev.Type == protocol.EvHandStarted && t.runner != nil {
 			// hand_started goes to everyone; private holes only to their seat
@@ -391,6 +436,16 @@ func (t *Table) applyEventToSeats(ev *protocol.Event) {
 		} else if ev.Amount > 0 {
 			s.streetBet += ev.Amount // call pay
 		}
+	case protocol.EvDropReveal:
+		for _, d := range ev.Decisions {
+			s := seatBy(d.Seat)
+			s.lastAction = map[bool]string{true: "stay", false: "drop"}[d.Stay]
+			s.folded = s.folded || !d.Stay
+		}
+	case protocol.EvDropReplenish:
+		// lastAction already says "stay" from the reveal; streetBet above
+		// shows the re-up chips in front of the seat
+		seatBy(ev.Seat).streetBet += ev.Amount
 	case protocol.EvStreetDealt:
 		for _, s := range t.seats {
 			s.streetBet = 0
@@ -434,6 +489,43 @@ func (t *Table) onTimeout() {
 		kind = engine.Check
 	}
 	t.advance(&engine.Action{Seat: la.Seat, Kind: kind}, nil)
+}
+
+// armDropTimeout: one decision clock per drop round — when it fires, anyone
+// who hasn't chosen is auto-dropped. Re-armed only when the round changes so
+// mid-round acks don't push the deadline back.
+func (t *Table) armDropTimeout(round int) {
+	if t.dropTimer != nil {
+		if t.dropTimerRound == round {
+			return
+		}
+		t.dropTimer.Stop()
+	}
+	t.dropTimerRound = round
+	if t.cfg.ActionTimeoutSecs <= 0 {
+		return
+	}
+	deadline := time.Now().Add(time.Duration(t.cfg.ActionTimeoutSecs) * time.Second).UnixMilli()
+	t.deadline = deadline
+	t.dropTimer = time.AfterFunc(time.Duration(t.cfg.ActionTimeoutSecs)*time.Second, func() {
+		t.Send(nil, protocol.ClientMsg{Type: "__drop_timeout"})
+	})
+}
+
+// onDropTimeout: auto-drop everyone who hasn't chosen; the last drop
+// triggers the engine's reveal + resolution.
+func (t *Table) onDropTimeout() {
+	t.dropTimer = nil
+	t.deadline = 0
+	if t.runner == nil {
+		return
+	}
+	for _, seat := range t.runner.UndecidedSeats() {
+		if _, _, ok := t.runner.DropDecidePending(); !ok {
+			break // round already resolved
+		}
+		t.advance(&engine.Action{Seat: seat, Kind: engine.DropOut}, nil)
+	}
 }
 
 // armPostHandTimeout: winner has one action-timeout to decide, else muck/skip.

@@ -6,7 +6,8 @@ import { cn } from "../../lib/cn";
 
 /**
  * Read-only table settings slide-over: the active config (RIT, 7-2, bomb
- * pot, timeouts). With bomb pots enabled it also exposes the arm button.
+ * pot, timeouts). With bomb pots enabled it also exposes the arm button;
+ * Texas Drop is always armable (it's a start-it-tonight game mode).
  */
 export function SettingsDrawer(props: {
   open: boolean;
@@ -15,6 +16,10 @@ export function SettingsDrawer(props: {
   blinds: string;
   bombPotLive: boolean;
   onArmBombPot: () => void;
+  texasDropLive: boolean;
+  onArmTexasDrop: () => void;
+  cardsOpen: boolean;
+  onSetCardsOpen: (open: boolean) => void;
   onClose: () => void;
 }) {
   const rows = () => {
@@ -31,6 +36,10 @@ export function SettingsDrawer(props: {
         value: c.sevenDeuce ? `on — ${money(c.sevenDeuceBounty)} per player` : "off",
       },
       { label: "Bomb pot", value: bombPotValue(c) },
+      {
+        label: "Texas Drop",
+        value: c.texasDropAnte > 0 ? `ante ${money(c.texasDropAnte)}` : "ante 2.5×BB",
+      },
     ];
   };
 
@@ -97,6 +106,47 @@ export function SettingsDrawer(props: {
               </Button>
             </div>
           </Show>
+
+          <Show when={!props.texasDropLive}>
+            <div class="border-t border-line px-4 py-3">
+              <Button
+                class="w-full"
+                onClick={() => {
+                  props.onArmTexasDrop();
+                  props.onClose();
+                }}
+              >
+                Start Texas Drop next hand
+              </Button>
+              <p class="mt-1.5 text-[11px] leading-snug text-fg-muted">
+                Everyone antes, the board runs out, then each player secretly stays or drops. Best
+                hand among stayers takes the pot — losers match it. Last one standing wins it all.
+              </p>
+            </div>
+          </Show>
+
+          <div class="border-t border-line px-4 py-3">
+            <h3 class="mb-2 text-[11px] font-bold uppercase tracking-wider text-fg-muted">
+              Your cards
+            </h3>
+            <div class="grid grid-cols-2 gap-2">
+              <Button
+                variant={props.cardsOpen ? "outline" : "default"}
+                onClick={() => props.onSetCardsOpen(false)}
+              >
+                Hold to peek
+              </Button>
+              <Button
+                variant={props.cardsOpen ? "default" : "outline"}
+                onClick={() => props.onSetCardsOpen(true)}
+              >
+                Always open
+              </Button>
+            </div>
+            <p class="mt-1.5 text-[11px] leading-snug text-fg-muted">
+              Saved on this device. Cards always flip up at showdown.
+            </p>
+          </div>
         </div>
       </div>
     </Show>

@@ -63,22 +63,24 @@ export function TableCenter(props: { table: TableState; dealKey: string; class?:
               </span>
             </Show>
             <div class="flex items-center gap-1.5">
-              {/* dealt cards: keyed by card identity — only new ones mount+animate */}
-              <For each={cards()}>
+              {/* dealt cards: Index (positional) — street events replace the
+                  array, so For would remount + re-animate the whole row every
+                  street; only the NEW card mounts and animates */}
+              <Index each={cards()}>
                 {(card, i) => (
-                  <div class="animate-deal" style={dealDelay(i(), 110)}>
+                  <div class="animate-deal" style={dealDelay(i, 110)}>
                     <CardRow
-                      cards={[card]}
+                      cards={[card()]}
                       size="sm"
                       revealed
                       class={cn(
                         "shadow-lg shadow-black/40",
-                        card.rabbit && "opacity-55 -rotate-6 saturate-50",
+                        card().rabbit && "opacity-55 -rotate-6 saturate-50",
                       )}
                     />
                   </div>
                 )}
-              </For>
+              </Index>
               {/* remaining empty slots */}
               <For each={slotsAfter(cards())}>
                 {() => (

@@ -46,6 +46,7 @@ const defaultCfg = (): TableState["cfg"] => ({
   sevenDeuceBounty: 0,
   bombPotMode: "off",
   bombPotTriggers: [],
+  texasDropAnte: 0,
 });
 
 function initialState(tableId: string): TableState {
@@ -71,6 +72,10 @@ function initialState(tableId: string): TableState {
     handNo: 0,
     message: "connecting…",
     bombPot: false,
+    texasDrop: false,
+    dropPhase: null,
+    texasDropArmed: false,
+    banner: null,
     isDoubleBoard: false,
     postHand: null,
     cfg: defaultCfg(),
@@ -104,6 +109,8 @@ function createTableStore(tableId: string): TableStore {
   let me: { name: string; isGuest: boolean } | null = null;
   let toastId = 0;
   let dealTimers: ReturnType<typeof setTimeout>[] = [];
+  let boardTimers: ReturnType<typeof setTimeout>[] = [];
+  let bannerTimer: ReturnType<typeof setTimeout>;
   let pendingDevDeal: WireCard[] | null = null; // ?deal= param → sent on next hand start
 
   const patch = (p: Partial<TableState>) => setState((s) => ({ ...s, ...p }));
@@ -120,6 +127,18 @@ function createTableStore(tableId: string): TableStore {
   const clearDealTimers = () => {
     dealTimers.forEach(clearTimeout);
     dealTimers = [];
+    boardTimers.forEach(clearTimeout);
+    boardTimers = [];
+  };
+
+  /** Felt banner with a 5s auto-dismiss — persistent banners covered the
+   *  top seat's cards. */
+  const showBanner = (kind: string | null) => {
+    clearTimeout(bannerTimer);
+    patch({ banner: kind });
+    if (kind) {
+      bannerTimer = setTimeout(() => patch({ banner: null }), 5000);
+    }
   };
 
   /**
@@ -233,8 +252,19 @@ function createTableStore(tableId: string): TableStore {
         sevenDeuceBounty: c.seven_deuce_bounty ?? 0,
         bombPotMode: c.bomb_pot_mode ?? "off",
         bombPotTriggers: c.bomb_pot_triggers ?? [],
+        texasDropAnte: c.texas_drop_ante ?? 0,
       };
       const rounds = snap.bomb_pot ? 4 : 2;
+      const heroSeatWire = snap.seats.find((x) => x.seat === snap.your_seat);
+      const dropPhase =
+        snap.texas_drop && snap.drop_round
+          ? {
+              round: snap.drop_round,
+              waiting: snap.drop_waiting ?? 0,
+              heroDecided: snap.drop_decided ?? false,
+              heroEligible: !!heroSeatWire?.in_hand && !heroSeatWire?.folded,
+            }
+          : null;
       return {
         ...s,
         name: snap.name,
@@ -260,6 +290,9 @@ function createTableStore(tableId: string): TableStore {
         // reconnect into a live hand keeps the bomb-pot banner; a fresh seat loses it
         bombPot: snap.bomb_pot ?? false,
         bombPotArmed: snap.bomb_pot_next ? (s.bombPotArmed ?? true) : null,
+        texasDrop: snap.texas_drop ?? false,
+        texasDropArmed: !!snap.texas_drop_next,
+        dropPhase,
         boardWins: inHand ? s.boardWins : [],
         // reconnect mid-hand: skip the deal animation, everything's landed
         dealt:
@@ -284,6 +317,7 @@ function createTableStore(tableId: string): TableStore {
     switch (e.type) {
       case "hand_started": {
         const bombPot = e.bomb_pot ?? false;
+        const texasDrop = e.texas_drop ?? false;
         const prevButton = state().buttonSeat;
         const btn = e.button_seat;
         const buttonMoved = btn != null && btn !== prevButton;
@@ -291,6 +325,9 @@ function createTableStore(tableId: string): TableStore {
           ...s,
           handNo: e.hand_id || s.handNo + 1,
           bombPot,
+          texasDrop,
+          texasDropArmed: false,
+          dropPhase: null,
           isDoubleBoard: bombPot,
           street: "preflop",
           potCents: 0,
@@ -307,15 +344,24 @@ function createTableStore(tableId: string): TableStore {
           dealTotal: bombPot ? 4 : 2,
           dealt: Array.from({ length: s.seats.length }, () => 0),
           dealDone: false,
-          message: bombPot ? "Bomb pot — 4 cards, antes in" : `Hand #${e.hand_id || s.handNo + 1}`,
+          message: bombPot
+            ? "Bomb pot — 4 cards, antes in"
+            : texasDrop
+              ? "Texas Drop — antes in, board incoming"
+              : `Hand #${e.hand_id || s.handNo + 1}`,
           seats: s.seats.map((x) => ({
             ...x,
+            // seats frame trails the event batch; mirror the server's
+            // dealt-in rule now so drop_decide + turn UI see fresh flags
+            inHand: !!x.player && x.stackCents > 0 && !x.sittingOut,
+            hasCards: !!x.player && x.stackCents > 0 && !x.sittingOut,
             folded: false,
             lastAction: undefined,
             isWinner: false,
             revealedCards: undefined,
           })),
         }));
+        showBanner(bombPot ? "bomb" : texasDrop ? "drop" : null);
         scheduleDeal(state(), bombPot, buttonMoved);
         // hidden dev flag: force hero hole cards (server honors only in dev builds)
         if (pendingDevDeal && state().heroSeat >= 0) {
@@ -330,6 +376,76 @@ function createTableStore(tableId: string): TableStore {
         break;
       case "bomb_pot_armed":
         patch({ bombPotArmed: e.cards?.length ? toUICard(e.cards[0]) : true });
+        showBanner("bomb_armed");
+        break;
+      case "texas_drop_armed":
+        // drop supersedes an armed bomb pot (server consumes it too)
+        patch({ texasDropArmed: true, bombPotArmed: null });
+        showBanner("drop_armed");
+        break;
+      case "drop_decide":
+        showBanner("drop");
+        setState((s) => {
+          const hero = s.seats[s.heroSeat];
+          return {
+            ...s,
+            street: "drop" as TableState["street"],
+            dropPhase: {
+              round: e.round ?? 1,
+              waiting: e.waiting ?? 0,
+              heroDecided: false,
+              heroEligible: !!hero?.inHand && !hero?.folded,
+            },
+            toAct: -1,
+            deadlineUnixMs: null,
+            legal: null,
+            message:
+              (e.round ?? 1) > 1
+                ? `Texas Drop — round ${e.round}, board is out`
+                : "Board is out — stay or drop?",
+          };
+        });
+        break;
+      case "drop_decided":
+        // private ack — only the decider receives it
+        setState((s) =>
+          seat === s.heroSeat && s.dropPhase
+            ? {
+                ...s,
+                dropPhase: {
+                  ...s.dropPhase,
+                  heroDecided: true,
+                  waiting: Math.max(0, s.dropPhase.waiting - 1),
+                },
+              }
+            : s,
+        );
+        break;
+      case "drop_reveal":
+        setState((s) => ({
+          ...s,
+          dropPhase: s.dropPhase ? { ...s.dropPhase, waiting: 0 } : null,
+          potCents: e.pot ?? s.potCents,
+          message: "Decisions in",
+          seats: s.seats.map((x) => {
+            const d = e.decisions?.find((y) => y.seat === x.seat);
+            return d
+              ? {
+                  ...x,
+                  lastAction: d.stay ? "Stay" : "Drop",
+                  folded: x.folded || !d.stay,
+                }
+              : x;
+          }),
+        }));
+        break;
+      case "drop_replenish":
+        setState((s) => ({
+          ...s,
+          potCents: e.pot ?? s.potCents,
+          message: `${e.player ?? "seat " + seat} re-ups the pot${e.amount ? ` (${money(e.amount)})` : ""}`,
+          seats: s.seats.map((x) => (x.seat === seat ? { ...x, betCents: e.amount ?? 0 } : x)),
+        }));
         break;
       case "blinds_posted":
       case "antes_posted":
@@ -350,24 +466,42 @@ function createTableStore(tableId: string): TableStore {
           ),
         }));
         break;
-      case "street_dealt":
-        setState((s) => {
-          const boards = s.board.boards.length ? [...s.board.boards] : [[]];
-          while (boards.length <= boardIdx) boards.push([]);
-          const isFlop = e.street === "flop";
-          boards[boardIdx] = isFlop ? uiCards(e.cards) : [...boards[boardIdx], ...uiCards(e.cards)];
-          const label = boards.length > 1 ? ` (board ${String.fromCharCode(65 + boardIdx)})` : "";
-          return {
-            ...s,
-            street: e.street as TableState["street"],
-            board: { ...s.board, boards },
-            isDoubleBoard: boards.length > 1,
-            potCents: e.pot ?? s.potCents,
-            message: `${e.street}: ${cardText(e.cards)}${label}`,
-            seats: s.seats.map((x) => ({ ...x, betCents: 0 })), // swept into the pot
-          };
-        });
+      case "street_dealt": {
+        // Drop rounds emit flop+turn+river in one batch — apply them
+        // staggered so the board deals like a normal hand instead of five
+        // cards flying at once (the pile-up). Guarded by handNo so stale
+        // timers can't patch a newer hand; snapshots always override.
+        const handNo = state().handNo;
+        const applyStreet = () =>
+          setState((s) => {
+            if (s.handNo !== handNo) return s;
+            const boards = s.board.boards.length ? [...s.board.boards] : [[]];
+            while (boards.length <= boardIdx) boards.push([]);
+            const isFlop = e.street === "flop";
+            boards[boardIdx] = isFlop
+              ? uiCards(e.cards)
+              : [...boards[boardIdx], ...uiCards(e.cards)];
+            const label = boards.length > 1 ? ` (board ${String.fromCharCode(65 + boardIdx)})` : "";
+            return {
+              ...s,
+              // drop_decide (same batch) may already be open — don't clobber
+              // the drop street label with the delayed flop/turn/river patch
+              street: s.street === "drop" ? s.street : (e.street as TableState["street"]),
+              board: { ...s.board, boards },
+              isDoubleBoard: boards.length > 1,
+              potCents: e.pot ?? s.potCents,
+              message: `${e.street}: ${cardText(e.cards)}${label}`,
+              seats: s.seats.map((x) => ({ ...x, betCents: 0 })), // swept into the pot
+            };
+          });
+        if (state().texasDrop) {
+          const delay = e.street === "flop" ? 600 : e.street === "turn" ? 950 : 1300;
+          boardTimers.push(setTimeout(applyStreet, delay));
+        } else {
+          applyStreet();
+        }
         break;
+      }
       case "action_accepted":
         setState((s) => {
           const kind = e.action?.kind;
@@ -435,6 +569,7 @@ function createTableStore(tableId: string): TableStore {
             message: first
               ? `${s.seats[first.seat]?.player ?? "seat " + first.seat} wins ${money(w.reduce((a, x) => a + x.amount, 0))}${first.hand_name ? ` — ${first.hand_name.replace(/_/g, " ")}` : ""}${boardLabel}`
               : s.message,
+            potCents: e.round ? 0 : s.potCents, // drop game: pot just got taken
             seats: s.seats.map((x) =>
               w.some((y) => y.seat === x.seat) ? { ...x, isWinner: true } : x,
             ),
@@ -470,6 +605,7 @@ function createTableStore(tableId: string): TableStore {
           toAct: -1,
           deadlineUnixMs: null,
           legal: null,
+          dropPhase: null,
           seats: s.seats.map((x) => {
             const fs = e.stacks?.find((y) => y.seat === x.seat);
             return fs ? { ...x, stackCents: fs.stack, betCents: 0 } : { ...x, betCents: 0 };
@@ -515,6 +651,10 @@ function createTableStore(tableId: string): TableStore {
     sock?.send({ type: "bomb_pot" });
   };
 
+  const armTexasDrop = () => {
+    sock?.send({ type: "texas_drop" });
+  };
+
   const devDeal = (cards: WireCard[]) => {
     pendingDevDeal = cards.length ? cards : null;
     // already in a hand between deal + hand_started? apply to next hand
@@ -534,6 +674,7 @@ function createTableStore(tableId: string): TableStore {
     send,
     joinSeat,
     armBombPot,
+    armTexasDrop,
     devDeal,
     get me() {
       return me;

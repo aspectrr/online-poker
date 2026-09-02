@@ -33,6 +33,7 @@ type TableConfig struct {
 	BombPotTriggers  []BombPotTrigger `json:"bomb_pot_triggers"`
 	SevenDeuce       bool             `json:"seven_deuce"`
 	SevenDeuceBounty int64            `json:"seven_deuce_bounty"`
+	TexasDropAnte    int64            `json:"texas_drop_ante,omitempty"` // Texas Drop ante, cents; 0 = house default 2.5×BB
 	MaxSeats         int              `json:"max_seats"`
 }
 
@@ -87,6 +88,9 @@ func (c *TableConfig) Validate() error {
 	}
 	if c.SevenDeuceBounty < 0 {
 		return fmt.Errorf("seven_deuce_bounty must be >= 0, got %d", c.SevenDeuceBounty)
+	}
+	if c.TexasDropAnte < 0 {
+		return fmt.Errorf("texas_drop_ante must be >= 0, got %d", c.TexasDropAnte)
 	}
 	if c.MaxSeats <= 0 {
 		return fmt.Errorf("max_seats must be positive, got %d", c.MaxSeats)

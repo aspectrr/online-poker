@@ -2,11 +2,11 @@ package protocol
 
 // ClientMsg is everything a client can send. Exactly one command per msg.
 type ClientMsg struct {
-	Type   string `json:"type"` // join | leave | action | chat | rabbit | bomb_pot | dev_deal
+	Type   string `json:"type"` // join | leave | action | chat | rabbit | bomb_pot | texas_drop | dev_deal
 	Seat   int    `json:"seat,omitempty"`
 	Name   string `json:"name,omitempty"`
 	Stack  int64  `json:"stack,omitempty"` // join: requested buy-in in cents (clamped server-side)
-	Kind   string `json:"kind,omitempty"`  // fold | check | call | bet (raise-TO)
+	Kind   string `json:"kind,omitempty"`  // fold | check | call | bet (raise-TO) | stay | drop
 	Amount int64  `json:"amount,omitempty"`
 	Text   string `json:"text,omitempty"`
 	Reveal *bool  `json:"reveal,omitempty"` // 7-2 uncontested decision
@@ -42,8 +42,13 @@ type TableState struct {
 	DeadlineUnixMs int64         `json:"deadline_unix_ms,omitempty"`
 	LegalActions   *LegalActions `json:"legal_actions,omitempty"`
 	HandInProgress bool          `json:"hand_in_progress"`
-	BombPotNext    bool          `json:"bomb_pot_next,omitempty"` // next hand is an armed bomb pot
-	BombPot        bool          `json:"bomb_pot,omitempty"`      // current hand is a bomb pot
+	BombPotNext    bool          `json:"bomb_pot_next,omitempty"`   // next hand is an armed bomb pot
+	BombPot        bool          `json:"bomb_pot,omitempty"`        // current hand is a bomb pot
+	TexasDropNext  bool          `json:"texas_drop_next,omitempty"` // next hand is an armed Texas Drop game
+	TexasDrop      bool          `json:"texas_drop,omitempty"`      // current hand is a Texas Drop game
+	DropRound      int           `json:"drop_round,omitempty"`      // current drop round, 1-based
+	DropWaiting    int           `json:"drop_waiting,omitempty"`    // seats yet to stay/drop
+	DropDecided    bool          `json:"drop_decided,omitempty"`    // viewer already decided this round
 }
 
 // ConfigWire: subset of table config the client renders (settings drawer).
@@ -60,6 +65,7 @@ type ConfigWire struct {
 	SevenDeuceBounty int64         `json:"seven_deuce_bounty"`
 	BombPotMode      string        `json:"bomb_pot_mode"` // off | manual | trigger
 	BombPotTriggers  []TriggerWire `json:"bomb_pot_triggers,omitempty"`
+	TexasDropAnte    int64         `json:"texas_drop_ante,omitempty"` // 0 = table has none set
 }
 
 // TriggerWire: bomb-pot card trigger for display.

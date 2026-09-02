@@ -77,10 +77,10 @@ export function Seat(props: {
               fallback={
                 // face-down backs, dealt one per beat: fly in from the deck
                 <div class="flex -space-x-6" style={dealVars()}>
-                  <For each={Array.from({ length: landed() }, (_, i) => i)}>
-                    {() => (
-                      <div class="animate-deal-seat">
-                        <Card faceDown size="sm" />
+                  <For each={Array.from({ length: total() })}>
+                    {(_, i) => (
+                      <div class={cn("h-20 w-14", i() < landed() && "animate-deal-seat")}>
+                        <Card faceDown size="sm" class={i() < landed() ? undefined : "opacity-0"} />
                       </div>
                     )}
                   </For>
@@ -93,6 +93,7 @@ export function Seat(props: {
         >
           <HeroHand
             cards={heroShown()!}
+            total={total()}
             revealed={heroRevealed()}
             interactive={canPeek()}
             peeking={props.peeking}

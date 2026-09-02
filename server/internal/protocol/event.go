@@ -27,6 +27,11 @@ const (
 	EvRabbitHunt       = engine.EvRabbitHunt
 	EvHandEnded        = engine.EvHandEnded
 	EvBombPotArmed     = engine.EvBombPotArmed
+	EvTexasDropArmed   = engine.EvTexasDropArmed
+	EvDropDecide       = engine.EvDropDecide
+	EvDropDecided      = engine.EvDropDecided
+	EvDropReveal       = engine.EvDropReveal
+	EvDropReplenish    = engine.EvDropReplenish
 )
 
 type (

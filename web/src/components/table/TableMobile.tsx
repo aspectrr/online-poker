@@ -85,6 +85,7 @@ export function TableMobile(props: {
               <div class="relative">
                 <HeroHand
                   cards={heroCards()!.slice(0, heroDealt())}
+                  total={t().dealTotal}
                   revealed={!!props.peeking || handOver()}
                   interactive
                   peeking={props.peeking}

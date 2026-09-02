@@ -15,6 +15,7 @@ const (
 	Turn
 	River
 	Showdown
+	Drop // Texas Drop decision phase: board is out, waiting on stay/drop
 )
 
 func (s Street) String() string {
@@ -29,6 +30,8 @@ func (s Street) String() string {
 		return "river"
 	case Showdown:
 		return "showdown"
+	case Drop:
+		return "drop"
 	}
 	return "?"
 }
@@ -69,7 +72,10 @@ type HandRunner struct {
 	done         bool
 	handID       int64
 	bombPot      bool
-	runItTwice   bool // RIT active for this hand (HU + always)
+	texasDrop    bool
+	dropRound    int                // current Texas Drop round (1-based)
+	dropDecided  map[int]ActionKind // player idx -> Stay/Drop this round
+	runItTwice   bool               // RIT active for this hand (HU + always)
 	headsUp      bool
 	sbIdx, bbIdx int
 
@@ -118,6 +124,12 @@ func startHand(cfg TableConfig, seats []SeatState, d Deck) (*HandRunner, error) 
 	if cfg.BombPot && cfg.Game != NLHE && cfg.Game != PLO4 {
 		return nil, fmt.Errorf("bomb pot requires NLHE or PLO4 table")
 	}
+	if cfg.TexasDrop && (cfg.BombPot || cfg.Game != NLHE) {
+		return nil, fmt.Errorf("texas drop is NLHE-only and mutually exclusive with bomb pot")
+	}
+	if cfg.TexasDrop && cfg.TexasDropAnte <= 0 {
+		return nil, fmt.Errorf("texas drop ante must be positive, got %d", cfg.TexasDropAnte)
+	}
 	if cfg.SevenDeuce.Enabled && cfg.Game != NLHE && !cfg.BombPot {
 		return nil, fmt.Errorf("7-2 bounty is NLHE-only")
 	}
@@ -126,6 +138,9 @@ func startHand(cfg TableConfig, seats []SeatState, d Deck) (*HandRunner, error) 
 		cfg:              cfg,
 		handID:           cfg.HandID,
 		bombPot:          cfg.BombPot,
+		texasDrop:        cfg.TexasDrop,
+		dropRound:        1,
+		dropDecided:      map[int]ActionKind{},
 		pendingRevealIdx: -1,
 		responded:        map[int]bool{},
 	}
@@ -149,7 +164,7 @@ func startHand(cfg TableConfig, seats []SeatState, d Deck) (*HandRunner, error) 
 	r.btn = btn
 	r.headsUp = len(r.players) == 2
 	// RIT: "always" config + heads-up (standard; multiway RIT omitted).
-	r.runItTwice = cfg.RunItTwice == RITAlways && r.headsUp && !r.bombPot
+	r.runItTwice = cfg.RunItTwice == RITAlways && r.headsUp && !r.bombPot && !r.texasDrop
 
 	holeN := cfg.Game.HoleCardCount()
 	if r.bombPot {
@@ -170,6 +185,7 @@ func startHand(cfg TableConfig, seats []SeatState, d Deck) (*HandRunner, error) 
 		Type:       EvHandStarted,
 		HandID:     r.handID,
 		BombPot:    r.bombPot,
+		TexasDrop:  r.texasDrop,
 		ButtonSeat: &cfg.ButtonSeat,
 	}}
 
@@ -194,6 +210,26 @@ func startHand(cfg TableConfig, seats []SeatState, d Deck) (*HandRunner, error) 
 			r.responded[i] = true
 		}
 		r.highBet = 0
+	} else if r.texasDrop {
+		// all ante the drop ante, no preflop betting: the board runs out and
+		// then everyone secretly chooses stay or drop
+		var antes []Event
+		for _, p := range r.players {
+			a := min64(cfg.TexasDropAnte, p.stack)
+			p.stack -= a
+			p.committed += a
+			p.streetBet = a
+			if p.stack == 0 {
+				p.allIn = true
+			}
+			antes = append(antes, Event{Type: EvAntesPosted, HandID: r.handID, Seat: p.seat, Player: p.name, Amount: a})
+		}
+		r.setupEvents = append(r.setupEvents, antes...)
+		r.toActIdx = -1
+		r.highBet = 0
+		for i := range r.players {
+			r.responded[i] = true
+		}
 	} else {
 		sb := r.btn // heads-up: button IS the small blind
 		bb := r.nextIdx(sb)

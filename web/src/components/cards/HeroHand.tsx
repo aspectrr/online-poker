@@ -1,6 +1,7 @@
-import { For } from "solid-js";
+import { For, Show, splitProps } from "solid-js";
 import type { UICard } from "../../lib/protocol";
 import { CardRow } from "./CardRow";
+import { Card } from "./Card";
 import { cn } from "../../lib/cn";
 
 /**
@@ -10,6 +11,9 @@ import { cn } from "../../lib/cn";
  */
 export function HeroHand(props: {
   cards: UICard[];
+  /** cards per player this hand (2, or 4 in a bomb pot) — every slot is
+   *  reserved up front so a newly-landed card never shifts the others */
+  total?: number;
   /** true once the hand is over (showdown) — cards show face-up without peeking */
   revealed: boolean;
   /** false renders a static hand (no interaction) */
@@ -25,6 +29,8 @@ export function HeroHand(props: {
     "--deal-dx": `${props.dealDx ?? 0}px`,
     "--deal-dy": `${props.dealDy ?? 0}px`,
   });
+
+  const [local] = splitProps(props, ["cards", "total", "revealed"]);
 
   return (
     <div
@@ -57,10 +63,12 @@ export function HeroHand(props: {
       }}
       onKeyUp={() => props.onPeekChange?.(false)}
     >
-      <For each={props.cards}>
-        {(card) => (
-          <div class="animate-deal-seat">
-            <CardRow cards={[card]} size="sm" revealed={props.revealed} />
+      <For each={Array.from({ length: Math.max(local.total ?? 0, local.cards.length) })}>
+        {(_, i) => (
+          <div class={cn("h-20 w-14", i() < local.cards.length && "animate-deal-seat")}>
+            <Show when={local.cards[i()]} fallback={<Card faceDown size="sm" class="opacity-0" />}>
+              <CardRow cards={[local.cards[i()]]} size="sm" revealed={local.revealed} />
+            </Show>
           </div>
         )}
       </For>

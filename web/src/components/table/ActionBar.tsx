@@ -24,6 +24,8 @@ export function ActionBar(props: {
   table: TableState;
   send: (a: PlayerAction) => void;
   error: string | null;
+  /** one-time hint shown under the idle bar (e.g. hold-to-peek) */
+  tip?: string | null;
 }) {
   const t = () => props.table;
   const legal = () => t().legal;
@@ -101,6 +103,20 @@ export function ActionBar(props: {
   };
 
   const onKey = (e: KeyboardEvent) => {
+    // Texas Drop decision keys work while betting is idle
+    const dc = t().dropPhase;
+    if (!active() && dc && dc.heroEligible && !dc.heroDecided) {
+      if (e.target instanceof HTMLInputElement) return;
+      const k = e.key.toLowerCase();
+      if (k === "s") {
+        e.preventDefault();
+        props.send({ kind: "stay" });
+      } else if (k === "f") {
+        e.preventDefault();
+        props.send({ kind: "drop" });
+      }
+      return;
+    }
     if (!active()) return;
     // ignore when typing in the bet input (except Enter/Esc)
     const inInput = e.target instanceof HTMLInputElement;
@@ -165,7 +181,10 @@ export function ActionBar(props: {
   onCleanup(() => window.removeEventListener("keydown", onKey));
 
   return (
-    <Show when={active()} fallback={<IdleBar table={t()} send={props.send} error={props.error} />}>
+    <Show
+      when={active()}
+      fallback={<IdleBar table={t()} send={props.send} error={props.error} tip={props.tip} />}
+    >
       <div class="mx-auto w-full max-w-3xl rounded-2xl border border-line bg-surface/95 p-3 shadow-2xl shadow-black/50 backdrop-blur">
         <Show when={props.error}>
           <div class="mb-2 rounded-lg bg-danger/15 px-3 py-1.5 text-xs font-medium text-danger">
@@ -319,45 +338,108 @@ function IdleBar(props: {
   table: TableState;
   send: (a: PlayerAction) => void;
   error: string | null;
+  tip?: string | null;
 }) {
   const t = () => props.table;
+  const drop = () => t().dropPhase;
+  const myChoice = () => !!drop() && drop()!.heroEligible && !drop()!.heroDecided;
+  const waitingLine = () => {
+    const d = drop();
+    if (!d) return null;
+    if (!d.heroEligible) return `Texas Drop — ${d.waiting} still to decide`;
+    if (d.heroDecided)
+      return `Locked in — waiting for ${d.waiting} decision${d.waiting === 1 ? "" : "s"}`;
+    return null;
+  };
   return (
     <div class="mx-auto w-full max-w-3xl">
       <Show
         when={props.error}
         fallback={
           <Show
-            when={t().postHand}
+            when={drop()}
             fallback={
-              <div class="rounded-2xl border border-line/60 bg-surface/50 px-4 py-2.5 text-center text-sm text-fg-muted backdrop-blur">
-                {t().handNo > 0
-                  ? t().street === "showdown" || t().street === "complete"
-                    ? t().message
-                    : "Waiting for opponents…"
-                  : "Connecting…"}
-              </div>
+              <Show
+                when={t().postHand}
+                fallback={
+                  <div class="rounded-2xl border border-line/60 bg-surface/50 px-4 py-2.5 text-center text-sm text-fg-muted backdrop-blur">
+                    {t().handNo > 0
+                      ? t().street === "showdown" ||
+                        t().street === "complete" ||
+                        t().street === "drop"
+                        ? t().message
+                        : "Waiting for opponents…"
+                      : "Connecting…"}
+                  </div>
+                }
+              >
+                {(ph) => (
+                  <div class="flex items-center justify-center gap-2 rounded-2xl border border-accent/40 bg-accent-tint/60 px-4 py-2.5 backdrop-blur">
+                    <span class="text-sm font-medium text-fg">Your decision:</span>
+                    <Show when={ph().bounty}>
+                      <Button size="sm" onClick={() => props.send({ kind: "reveal" })}>
+                        Show 7-2 (take bounty)
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => props.send({ kind: "muck" })}
+                      >
+                        Muck
+                      </Button>
+                    </Show>
+                    <Show when={ph().rabbit}>
+                      <Button size="sm" onClick={() => props.send({ kind: "rabbit" })}>
+                        Rabbit hunt
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => props.send({ kind: "muck" })}
+                      >
+                        Skip
+                      </Button>
+                    </Show>
+                  </div>
+                )}
+              </Show>
             }
           >
-            {(ph) => (
-              <div class="flex items-center justify-center gap-2 rounded-2xl border border-accent/40 bg-accent-tint/60 px-4 py-2.5 backdrop-blur">
-                <span class="text-sm font-medium text-fg">Your decision:</span>
-                <Show when={ph().bounty}>
-                  <Button size="sm" onClick={() => props.send({ kind: "reveal" })}>
-                    Show 7-2 (take bounty)
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => props.send({ kind: "muck" })}>
-                    Muck
-                  </Button>
-                </Show>
-                <Show when={ph().rabbit}>
-                  <Button size="sm" onClick={() => props.send({ kind: "rabbit" })}>
-                    Rabbit hunt
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => props.send({ kind: "muck" })}>
-                    Skip
-                  </Button>
-                </Show>
-              </div>
+            {(_d) => (
+              <Show
+                when={myChoice()}
+                fallback={
+                  <div class="rounded-2xl border border-line/60 bg-surface/50 px-4 py-2.5 text-center text-sm text-fg-muted backdrop-blur">
+                    {waitingLine()}
+                  </div>
+                }
+              >
+                <div class="flex flex-col items-center gap-2 rounded-2xl border border-accent/40 bg-accent-tint/60 px-4 py-2.5 backdrop-blur">
+                  <div class="text-center">
+                    <span class="text-sm font-semibold text-fg">Stay or drop?</span>
+                    <span class="ml-2 text-xs text-fg-muted">
+                      pot {money(t().potCents)} · stay and lose = match the pot
+                    </span>
+                  </div>
+                  <div class="flex w-full gap-2.5">
+                    <Button
+                      variant="danger"
+                      size="lg"
+                      class="flex-1"
+                      onClick={() => props.send({ kind: "drop" })}
+                    >
+                      Drop <kbd class="ml-1 rounded bg-black/25 px-1 text-[10px]">F</kbd>
+                    </Button>
+                    <Button
+                      size="lg"
+                      class="flex-[1.4]"
+                      onClick={() => props.send({ kind: "stay" })}
+                    >
+                      Stay up <kbd class="ml-1 rounded bg-black/30 px-1 text-[10px]">S</kbd>
+                    </Button>
+                  </div>
+                </div>
+              </Show>
             )}
           </Show>
         }
@@ -365,6 +447,9 @@ function IdleBar(props: {
         <div class="rounded-2xl border border-danger/40 bg-danger/10 px-4 py-2.5 text-center text-sm font-medium text-danger">
           {props.error}
         </div>
+      </Show>
+      <Show when={props.tip}>
+        <div class="mt-1.5 text-center text-[11px] font-medium text-fg-faint">{props.tip}</div>
       </Show>
     </div>
   );

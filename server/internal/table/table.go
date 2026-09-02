@@ -72,6 +72,13 @@ type Table struct {
 	forceBombPot bool
 	// bombPot: the CURRENT hand is a bomb pot (for reconnect snapshots)
 	bombPot bool
+	// forceTexasDrop: next hand is a Texas Drop game (manual arm, texas_drop msg)
+	forceTexasDrop bool
+	// texasDrop: the CURRENT hand is a Texas Drop game (snapshots)
+	texasDrop bool
+	// dropTimer: stay/drop decision timeout for the round in dropTimerRound
+	dropTimer      *time.Timer
+	dropTimerRound int
 	// devDeals: forced hole cards per seat, consumed by the next startHand
 	// (dev builds only)
 	devDeals map[int][]engine.Card
@@ -111,6 +118,12 @@ func engineConfig(row store.GameTable) engine.TableConfig {
 		RabbitHunt:          row.Config.RabbitHunt,
 		BombPotEveryNHands:  0,
 		BombPotCardTriggers: triggersToEngine(row.Config.BombPotTriggers),
+	}
+	// Texas Drop ante: stored value, else the house default 2.5×BB
+	// (50¢ at 10/20 — the game this table hosts it for).
+	cfg.TexasDropAnte = row.Config.TexasDropAnte
+	if cfg.TexasDropAnte == 0 {
+		cfg.TexasDropAnte = bb * 5 / 2
 	}
 	// 7-2 is NLHE-only in the engine; don't arm it on PLO4 tables.
 	if row.GameType == "NLHE" {
@@ -216,6 +229,9 @@ func (t *Table) run() {
 			if t.nextHand != nil {
 				t.nextHand.Stop()
 			}
+			if t.dropTimer != nil {
+				t.dropTimer.Stop()
+			}
 			return
 		case in := <-t.inbox:
 			t.handle(in)
@@ -275,6 +291,9 @@ func (t *Table) handle(in inbox) {
 		t.timeoutSeat = in.msg.Seat
 		t.onPostTimeout()
 		return
+	case "__drop_timeout":
+		t.onDropTimeout()
+		return
 	}
 	if _, ok := t.clients[in.client]; !ok {
 		return
@@ -292,6 +311,8 @@ func (t *Table) handle(in inbox) {
 		rabbitReveal(t, in)
 	case "bomb_pot":
 		t.armBombPot()
+	case "texas_drop":
+		t.armTexasDrop()
 	case "dev_deal":
 		t.devDeal(in)
 	default:
@@ -357,12 +378,24 @@ func (t *Table) broadcastEvent(ev protocol.Event) {
 
 // armBombPot: manual arm (bomb_pot msg) — next hand is a double-board bomb pot.
 func (t *Table) armBombPot() {
-	if t.forceBombPot {
+	if t.forceBombPot || t.forceTexasDrop || (t.runner != nil && t.texasDrop) {
 		return
 	}
 	t.forceBombPot = true
 	log.Printf("table %s: bomb pot armed manually", t.row.ID)
 	t.broadcastEvent(protocol.Event{Type: protocol.EvBombPotArmed})
+}
+
+// armTexasDrop: manual arm (texas_drop msg) — next hand is a Texas Drop game.
+// Supersedes an armed bomb pot; ignored while a drop game is running.
+func (t *Table) armTexasDrop() {
+	if t.forceTexasDrop || (t.runner != nil && t.texasDrop) {
+		return
+	}
+	t.forceTexasDrop = true
+	t.forceBombPot = false
+	log.Printf("table %s: texas drop armed manually", t.row.ID)
+	t.broadcastEvent(protocol.Event{Type: protocol.EvTexasDropArmed})
 }
 
 // devDeal: force this seat's hole cards next hand (DEV_AUTH tables only).

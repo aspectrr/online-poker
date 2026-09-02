@@ -178,6 +178,15 @@ func (r *HandRunner) payout(seat int, amount int64) {
 	r.playerBySeat(seat).stack += amount
 }
 
+// payoutOut: award chips out of the live pot — stack up, committed down, so
+// potTotal() keeps tracking the pot between Texas Drop rounds (the hand
+// doesn't end after most awards).
+func (r *HandRunner) payoutOut(seat int, amount int64) {
+	p := r.playerBySeat(seat)
+	p.stack += amount
+	p.committed -= amount
+}
+
 // sevenDeuceShowdownWinner: sole pot winner (no split) holding 7 AND 2.
 func (r *HandRunner) sevenDeuceShowdownWinner(layers []potLayer) (int, bool) {
 	if len(layers) != 1 {

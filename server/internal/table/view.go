@@ -37,17 +37,10 @@ func (t *Table) leave(c *ws.Client) {
 	t.broadcastSeats()
 }
 
-// action: betting action from the seat owning this connection.
+// action: betting / stay-drop action from the seat owning this connection.
 func (t *Table) action(c *ws.Client, m protocol.ClientMsg) {
 	s := t.seatOfClient(c)
 	if s == nil || t.runner == nil || t.pending != nil {
-		return
-	}
-	la := t.runner.LegalActionsFor()
-	if la == nil || la.Seat != s.seat {
-		if s.conn != nil {
-			s.conn.TrySend(protocol.ServerMsg{Type: "error", Error: "not your turn"})
-		}
 		return
 	}
 	var kind engine.ActionKind
@@ -60,8 +53,25 @@ func (t *Table) action(c *ws.Client, m protocol.ClientMsg) {
 		kind = engine.Call
 	case "bet", "raise":
 		kind = engine.Raise
+	case "stay":
+		kind = engine.Stay
+	case "drop":
+		kind = engine.DropOut
 	default:
 		s.conn.TrySend(protocol.ServerMsg{Type: "error", Error: "unknown action kind"})
+		return
+	}
+	if kind == engine.Stay || kind == engine.DropOut {
+		// stay/drop isn't a betting turn — LegalActionsFor is nil during the
+		// decision phase; the engine validates eligibility and double choices
+		t.advance(&engine.Action{Seat: s.seat, Kind: kind}, s)
+		return
+	}
+	la := t.runner.LegalActionsFor()
+	if la == nil || la.Seat != s.seat {
+		if s.conn != nil {
+			s.conn.TrySend(protocol.ServerMsg{Type: "error", Error: "not your turn"})
+		}
 		return
 	}
 	t.advance(&engine.Action{Seat: s.seat, Kind: kind, Amount: m.Amount}, s)
@@ -127,12 +137,15 @@ func (t *Table) snapshotFor(viewer int) *protocol.TableState {
 			SevenDeuceBounty: t.row.Config.SevenDeuceBounty,
 			BombPotMode:      t.row.Config.BombPotMode,
 			BombPotTriggers:  triggersWire(t.row.Config.BombPotTriggers),
+			TexasDropAnte:    t.cfg.TexasDropAnte,
 		},
-		Seats:       t.seatsWire(),
-		YourSeat:    viewer,
-		HandNo:      t.handNo,
-		BombPotNext: t.forceBombPot,
-		BombPot:     t.bombPot && t.runner != nil,
+		Seats:         t.seatsWire(),
+		YourSeat:      viewer,
+		HandNo:        t.handNo,
+		BombPotNext:   t.forceBombPot,
+		BombPot:       t.bombPot && t.runner != nil,
+		TexasDropNext: t.forceTexasDrop,
+		TexasDrop:     t.texasDrop && t.runner != nil,
 	}
 	if t.runner != nil {
 		st.HandInProgress = true
@@ -146,6 +159,14 @@ func (t *Table) snapshotFor(viewer int) *protocol.TableState {
 			if la.Seat == viewer {
 				st.LegalActions = la
 			}
+		}
+		if round, waiting, ok := t.runner.DropDecidePending(); ok {
+			st.DropRound = round
+			st.DropWaiting = waiting
+			if viewer >= 0 {
+				st.DropDecided = t.runner.SeatDecided(viewer)
+			}
+			st.DeadlineUnixMs = t.deadlineMs() // drop decision clock
 		}
 		if viewer >= 0 {
 			if s := t.seatByNo(viewer); s != nil {

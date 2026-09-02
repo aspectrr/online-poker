@@ -142,6 +142,10 @@ export function createDemoTable(tableId: string): TableStore {
     handNo: 0,
     message: "Taking your seat…",
     bombPot: false,
+    texasDrop: false,
+    dropPhase: null,
+    texasDropArmed: false,
+    banner: null,
     isDoubleBoard: false,
     postHand: null,
     turnTimeoutMs: 20000,
@@ -154,6 +158,7 @@ export function createDemoTable(tableId: string): TableStore {
       sevenDeuceBounty: 0,
       bombPotMode: "off",
       bombPotTriggers: [],
+      texasDropAnte: 0,
     },
     bombPotArmed: null,
     boardWins: [],
@@ -365,6 +370,7 @@ export function createDemoTable(tableId: string): TableStore {
       return { name: "you", isGuest: true } as const;
     },
     armBombPot: () => {},
+    armTexasDrop: () => {},
     devDeal: () => {},
     dispose: clearAll,
   };
