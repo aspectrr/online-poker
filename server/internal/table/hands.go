@@ -191,6 +191,15 @@ func (t *Table) advance(a *engine.Action, actor *seat) *engine.Action {
 // afterAdvance: hand-over bookkeeping — persist, prompt post-hand
 // decisions, arm timers, schedule the next hand.
 func (t *Table) afterAdvance() {
+	t.afterAdvanceInner()
+	// armTimeout et al. just set t.deadline; state frames are the only
+	// channel that carries it, so push one out or clients never count down
+	if t.deadline != 0 {
+		t.broadcastState()
+	}
+}
+
+func (t *Table) afterAdvanceInner() {
 	if t.runner == nil {
 		return
 	}

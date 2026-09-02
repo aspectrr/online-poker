@@ -582,8 +582,9 @@ export function TablePage() {
         </div>
       </footer>
 
-      {/* toasts (7-2 bounty gold, rabbit hunt mascot) */}
-      <div class="pointer-events-none fixed inset-x-0 top-1 z-40 flex flex-col items-center gap-1.5">
+      {/* toasts (7-2 bounty gold, rabbit hunt mascot) — side cards, not
+          center-screen banners */}
+      <div class="pointer-events-none fixed right-3 top-3 z-40 flex w-72 flex-col items-stretch gap-2">
         <For each={store.toasts}>
           {(toast) => (
             <Show
@@ -592,20 +593,24 @@ export function TablePage() {
                 <Show
                   when={toast.kind === "rabbit"}
                   fallback={
-                    <div class="rounded-full border border-accent/40 bg-surface/95 px-4 py-1.5 text-sm font-semibold text-accent shadow-lg">
+                    <div class="animate-toast-in rounded-xl border border-line bg-surface/95 px-3.5 py-2.5 text-sm font-medium text-fg shadow-xl backdrop-blur">
                       {toast.text}
                     </div>
                   }
                 >
-                  <div class="flex items-center gap-2 rounded-full border border-line bg-surface/95 px-4 py-1.5 text-sm font-semibold text-fg shadow-lg">
-                    <RabbitMark class="size-5" />
+                  <div class="animate-toast-in flex items-center gap-2.5 rounded-xl border border-line bg-surface/95 px-3.5 py-2.5 text-sm font-medium text-fg shadow-xl backdrop-blur">
+                    <RabbitMark class="size-6 shrink-0" />
                     {toast.text}
                   </div>
                 </Show>
               }
             >
-              <div class="animate-toast-gold flex items-center gap-2 rounded-xl border-2 border-marigold bg-marigold/15 px-5 py-2.5 text-base font-bold text-marigold shadow-[0_0_28px_rgba(255,177,16,0.4)]">
-                {toast.text}
+              <div class="animate-toast-in relative overflow-hidden rounded-xl border border-marigold/50 bg-surface/95 px-3.5 py-2.5 text-sm font-semibold text-fg shadow-xl backdrop-blur">
+                <div class="absolute inset-y-0 left-0 w-1 bg-marigold" />
+                <div class="flex items-center gap-2">
+                  <span class="text-marigold">★</span>
+                  {toast.text}
+                </div>
               </div>
             </Show>
           )}

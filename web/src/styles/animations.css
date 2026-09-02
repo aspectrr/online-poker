@@ -220,23 +220,19 @@
   animation: bet-fly 600ms cubic-bezier(0.3, 0.7, 0.4, 1) forwards;
 }
 
-/* Gold celebratory toast pop (7-2 bounty) */
-@keyframes toast-gold {
-  0% {
-    transform: scale(0.8);
+/* Toast slide-in from the right rail */
+@keyframes toast-in {
+  from {
+    transform: translateX(24px);
     opacity: 0;
   }
-  60% {
-    transform: scale(1.06);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1);
+  to {
+    transform: translateX(0);
     opacity: 1;
   }
 }
-.animate-toast-gold {
-  animation: toast-gold 450ms cubic-bezier(0.22, 1, 0.36, 1) both;
+.animate-toast-in {
+  animation: toast-in 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /* Settings drawer slide-in */

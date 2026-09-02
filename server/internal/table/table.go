@@ -207,6 +207,17 @@ func (t *Table) Send(c *ws.Client, m protocol.ClientMsg) {
 	}
 }
 
+// broadcastState: fresh per-viewer snapshot to every attached client.
+func (t *Table) broadcastState() {
+	for cl := range t.clients {
+		seat := -1
+		if s := t.seatOfClient(cl); s != nil {
+			seat = s.seat
+		}
+		cl.TrySend(protocol.ServerMsg{Type: "state", State: t.snapshotFor(seat)})
+	}
+}
+
 // Close stops the table goroutine.
 func (t *Table) Close() { t.once.Do(t.stop) }
 
