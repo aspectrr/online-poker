@@ -146,6 +146,8 @@ export function createDemoTable(tableId: string): TableStore {
     dropPhase: null,
     texasDropArmed: false,
     banner: null,
+    equities: null,
+    boardWinTexts: [],
     isDoubleBoard: false,
     postHand: null,
     turnTimeoutMs: 20000,

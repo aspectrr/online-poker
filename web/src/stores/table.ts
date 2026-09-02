@@ -76,6 +76,8 @@ function initialState(tableId: string): TableState {
     dropPhase: null,
     texasDropArmed: false,
     banner: null,
+    equities: null,
+    boardWinTexts: [],
     isDoubleBoard: false,
     postHand: null,
     cfg: defaultCfg(),
@@ -328,6 +330,8 @@ function createTableStore(tableId: string): TableStore {
           texasDrop,
           texasDropArmed: false,
           dropPhase: null,
+          equities: null,
+          boardWinTexts: [],
           isDoubleBoard: bombPot,
           street: "preflop",
           potCents: 0,
@@ -539,11 +543,15 @@ function createTableStore(tableId: string): TableStore {
         }));
         break;
       }
-      case "all_in_runout":
+      case "all_in_runout": {
+        const eq: Record<number, number> = {};
+        for (const x of e.equities ?? []) eq[x.seat] = x.pct;
         patch({
           message: e.board_index === 1 ? "All-in — running it twice" : "All-in — running it out",
+          equities: Object.keys(eq).length ? eq : null,
         });
         break;
+      }
       case "showdown":
         setState((s) => ({
           ...s,
@@ -564,12 +572,23 @@ function createTableStore(tableId: string): TableStore {
           const boardLabel = s.isDoubleBoard
             ? ` ${s.bombPot ? "board " + String.fromCharCode(65 + winBoardIdx) : "run " + (winBoardIdx + 1)}`
             : "";
+          const names = [
+            ...new Set(w.map((y) => s.seats[y.seat]?.player ?? "seat " + y.seat)),
+          ].join(" + ");
+          const line = `${names} wins ${money(w.reduce((a, x) => a + (x.amount ?? 0), 0))}${first?.hand_name ? ` — ${first.hand_name.replace(/_/g, " ")}` : ""}`;
+          // double board: one winner line per board so both stay visible
+          let boardWinTexts = s.boardWinTexts;
+          let message = first ? line : s.message;
+          if (s.isDoubleBoard) {
+            boardWinTexts = [...(s.boardWinTexts ?? [])];
+            boardWinTexts[winBoardIdx] = `${line} (${boardLabel.trim()})`;
+            message = boardWinTexts.filter(Boolean).join("  ·  ");
+          }
           return {
             ...s,
-            message: first
-              ? `${s.seats[first.seat]?.player ?? "seat " + first.seat} wins ${money(w.reduce((a, x) => a + x.amount, 0))}${first.hand_name ? ` — ${first.hand_name.replace(/_/g, " ")}` : ""}${boardLabel}`
-              : s.message,
+            message,
             potCents: e.round ? 0 : s.potCents, // drop game: pot just got taken
+            boardWinTexts,
             seats: s.seats.map((x) =>
               w.some((y) => y.seat === x.seat) ? { ...x, isWinner: true } : x,
             ),
@@ -606,6 +625,7 @@ function createTableStore(tableId: string): TableStore {
           deadlineUnixMs: null,
           legal: null,
           dropPhase: null,
+          equities: null,
           seats: s.seats.map((x) => {
             const fs = e.stacks?.find((y) => y.seat === x.seat);
             return fs ? { ...x, stackCents: fs.stack, betCents: 0 } : { ...x, betCents: 0 };

@@ -254,7 +254,9 @@ func (r *HandRunner) finishUncontested() []Event {
 	// 7-2 uncontested: only if winner reveals (decided via Reveal action)
 	if r.cfg.SevenDeuce.Enabled && r.cfg.Game == NLHE && !r.bombPot && holdsSevenDeuce(r.playerBySeat(w)) {
 		r.pendingRevealIdx = r.idxOfSeat(w)
-	} else if r.cfg.RabbitHunt && !r.bombPot { // offered even preflop (full board rabbited)
+	} else if r.cfg.RabbitHunt && !r.bombPot && !r.texasDrop && (r.board == nil || len(r.board[0]) < 5) {
+		// offered until the board is complete — a rabbit on a full board
+		// reveals nothing and just stalls the table
 		r.rabbitAvailable = true
 	}
 	// no terminal event yet if a decision is pending

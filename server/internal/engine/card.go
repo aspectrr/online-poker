@@ -53,6 +53,11 @@ type Deck struct {
 	remaining int
 }
 
+// Remaining: copy of the not-yet-dealt cards.
+func (d Deck) Remaining() []Card {
+	return append([]Card(nil), d.cards[:d.remaining]...)
+}
+
 func NewDeck() (Deck, error) {
 	var d Deck
 	for i := range d.cards {

@@ -128,6 +128,7 @@ export type GameEvent = {
   waiting?: number; // drop_decide: seats yet to choose
   stay?: boolean; // drop_decided ack
   decisions?: { seat: number; stay: boolean }[]; // drop_reveal
+  equities?: { seat: number; pct: number }[]; // all_in_runout: win %
 };
 
 export type ChatMsg = { seat: number; player: string; text: string };
@@ -311,6 +312,10 @@ export type TableState = {
   bombPotArmed: UICard | true | null;
   /** board rows that had a pot awarded to them (per-board win highlight) */
   boardWins: number[];
+  /** all-in win % per seat while a runout is in progress */
+  equities: Record<number, number> | null;
+  /** per-board winner lines while a double-board hand resolves */
+  boardWinTexts: (string | undefined)[];
   /** transient felt banner kind ("drop"|"drop_armed"|"bomb"|"bomb_armed"), auto-clears after 5s */
   banner: string | null;
   /** opening deal sequence: cards landed per seat / cards per player */

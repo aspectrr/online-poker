@@ -302,6 +302,7 @@ func (r *HandRunner) beginRunoutIfNeeded() Event {
 		Street:     r.street.String(),
 		Pot:        r.potTotal(),
 		BoardIndex: len(r.board) - 1, // 1 when running it twice
+		Equities:   r.computeEquities(),
 	}
 }
 

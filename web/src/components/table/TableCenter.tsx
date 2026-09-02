@@ -23,6 +23,9 @@ export function TableCenter(props: { table: TableState; dealKey: string; class?:
     <div
       class={cn(
         "pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3",
+        // two board rows + labels are tall — scale down so bet chips and the
+        // pot pill don't sit on the cards
+        t().isDoubleBoard && "scale-[0.82]",
         props.class,
       )}
     >

@@ -40,6 +40,12 @@ type DropDecision struct {
 	Stay bool `json:"stay"`
 }
 
+// Equity: expected share of the pot at an all-in runout, 0-100.
+type Equity struct {
+	Seat int `json:"seat"`
+	Pct  int `json:"pct"`
+}
+
 type Winner struct {
 	Seat       int    `json:"seat"`
 	Amount     int64  `json:"amount"`
@@ -88,6 +94,8 @@ type Event struct {
 	Waiting   int            `json:"waiting,omitempty"`   // seats yet to decide
 	Stay      bool           `json:"stay,omitempty"`      // drop_decided ack
 	Decisions []DropDecision `json:"decisions,omitempty"` // drop_reveal
+	// AllInRunout: each in-hand player's expected pot share, 0-100.
+	Equities []Equity `json:"equities,omitempty"`
 	// ButtonSeat: hand_started only — where the dealer button sits this hand.
 	// Pointer so seat 0 survives omitempty (clients animate the button move).
 	ButtonSeat *int `json:"button_seat,omitempty"`

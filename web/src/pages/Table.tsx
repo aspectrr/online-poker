@@ -481,7 +481,9 @@ export function TablePage() {
                       animation, making every hand "jump" */}
                   <Index each={t().seats}>
                     {(seat) => {
-                      const [fx, fy] = posFor(seat().seat);
+                      // reactive: heroSeat arrives with the join snapshot, so
+                      // positions must re-rotate when it lands
+                      const pos = () => posFor(seat().seat);
                       const canJoin = () =>
                         t().heroSeat < 0 && !seat().player && store.status === "open";
                       return (
@@ -492,13 +494,13 @@ export function TablePage() {
                           frac={fracFor(seat().seat)}
                           isHero={seat().seat === t().heroSeat}
                           dealt={t().dealt[seat().seat] ?? 0}
-                          dealDx={(0.5 - fx) * DESIGN_W}
-                          dealDy={(0.5 - fy) * DESIGN_H}
+                          dealDx={(0.5 - pos()[0]) * DESIGN_W}
+                          dealDy={(0.5 - pos()[1]) * DESIGN_H}
                           landing={t().landingSeat === seat().seat}
                           peeking={seat().seat === t().heroSeat ? heroPeeking() : undefined}
                           onPeekChange={seat().seat === t().heroSeat ? setPeeked : undefined}
                           onJoin={canJoin() ? () => openJoinAt(seat().seat) : undefined}
-                          style={`left:${fx * 100}%; top:${fy * 100}%`}
+                          style={`left:${pos()[0] * 100}%; top:${pos()[1] * 100}%`}
                         />
                       );
                     }}
@@ -513,19 +515,28 @@ export function TablePage() {
                   <Index each={t().seats}>
                     {(seat) => {
                       if (!seat().player) return null;
-                      const p = posFor(seat().seat);
+                      const p = () => posFor(seat().seat);
                       // stack chips sit between seat and pot; on bottom-row
-                      // seats that zone holds the hero's cards — lift them clear
-                      const stackY = p[1] > 0.7 ? p[1] - 0.24 : 0.5 + (p[1] - 0.5) * 0.72;
-                      const stackPos: [number, number] = [0.5 + (p[0] - 0.5) * 0.72, stackY];
-                      const betPos: [number, number] = [
-                        0.5 + (p[0] - 0.5) * 0.5,
-                        0.5 + (p[1] - 0.5) * 0.5,
+                      // seats that zone holds the hero's cards — lift them clear.
+                      // double boards are tall — hug bets and stacks closer
+                      // to the players so they clear the board rows.
+                      // all positions stay reactive: heroSeat arrives with the
+                      // join snapshot and the ring must re-rotate then.
+                      const spread = () => (t().isDoubleBoard ? 0.62 : 0.5);
+                      const stackY = () =>
+                        p()[1] > 0.7 ? p()[1] - 0.24 : 0.5 + (p()[1] - 0.5) * 0.74;
+                      const stackPos = (): [number, number] => [
+                        0.5 + (p()[0] - 0.5) * (t().isDoubleBoard ? 0.78 : 0.72),
+                        stackY(),
+                      ];
+                      const betPos = (): [number, number] => [
+                        0.5 + (p()[0] - 0.5) * spread(),
+                        0.5 + (p()[1] - 0.5) * spread(),
                       ];
                       return (
                         <>
-                          <FeltChips pos={stackPos} cents={seat().stackCents} />
-                          <BetChips pos={betPos} from={stackPos} bet={seat().betCents} />
+                          <FeltChips pos={stackPos()} cents={seat().stackCents} />
+                          <BetChips pos={betPos()} from={stackPos()} bet={seat().betCents} />
                         </>
                       );
                     }}

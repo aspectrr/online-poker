@@ -62,9 +62,10 @@ export function Seat(props: {
   return (
     <div
       class={cn(
-        "absolute flex w-36 flex-col items-center gap-1.5 -translate-x-1/2 -translate-y-1/2",
+        "absolute flex w-36 flex-col items-center gap-1.5 -translate-x-1/2 -translate-y-1/2 rounded-2xl",
         props.class,
       )}
+      classList={{ "animate-board-win ring-2 ring-success/80 bg-success/10": s().isWinner }}
       style={props.style}
     >
       {/* cards sit above the nameplate */}
@@ -102,6 +103,13 @@ export function Seat(props: {
             dealDy={props.dealDy}
           />
         </Show>
+      </Show>
+
+      {/* all-in equity: shown while the runout is in progress */}
+      <Show when={!empty() && t().equities && t().equities![s().seat] != null}>
+        <span class="rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-bold tabular-nums text-white shadow">
+          {t().equities![s().seat]}% to win
+        </span>
       </Show>
 
       <Show when={!empty()}>

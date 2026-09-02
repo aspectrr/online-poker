@@ -187,6 +187,11 @@ function OpponentChip(props: {
             {money(s().betCents)}
           </span>
         </Show>
+        <Show when={props.table.equities && props.table.equities[s().seat] != null}>
+          <span class="rounded bg-black/60 px-1 text-[9px] font-bold tabular-nums text-white">
+            {props.table.equities![s().seat]}%
+          </span>
+        </Show>
         <Show when={s().lastAction}>
           <span
             class={cn(
