@@ -270,10 +270,12 @@ func firstTriggerMatch(triggers []engine.CardTrigger, cards []engine.Card) (engi
 func (t *Table) handEnded() {
 	// advance button to next occupied seat
 	t.button = t.nextButton()
+	// bomb-pot triggers match the previous hand's FLOP cards only — a
+	// trigger card peeling off on the turn/river shouldn't arm a bomb pot
 	var lastDealt []engine.Card
 	wasTexasDrop := t.texasDrop
 	if t.runner != nil {
-		lastDealt = t.runner.DealtCards() // for the next hand's bomb-pot triggers
+		lastDealt = t.runner.FlopCards()
 	}
 	t.runner = nil
 	t.pending = nil

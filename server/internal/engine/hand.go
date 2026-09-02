@@ -287,8 +287,20 @@ func (r *HandRunner) postBlind(idx int, amount int64) {
 }
 
 // DealtCards: every card dealt this hand (holes + burns + board).
-// Table layer matches BombPotCardTriggers against this between hands.
 func (r *HandRunner) DealtCards() []Card { return r.dealt }
+
+// FlopCards: the flop (first 3 cards) of each board. Bomb-pot card
+// triggers match against these only — a trigger card on the turn or
+// river doesn't arm the next hand.
+func (r *HandRunner) FlopCards() []Card {
+	var out []Card
+	for _, b := range r.board {
+		if len(b) >= 3 {
+			out = append(out, b[0], b[1], b[2])
+		}
+	}
+	return out
+}
 
 // HolesFor: a seat's private hole cards, for per-seat delivery by the
 // transport. Nil when the seat isn't in this hand. Copy: callers must not
