@@ -149,12 +149,28 @@ func (r *HandRunner) finishShowdown() []Event {
 	if r.cfg.SevenDeuce.Enabled && r.cfg.Game == NLHE && !r.bombPot {
 		if w, ok := r.sevenDeuceShowdownWinner(layers); ok {
 			evs = append(evs, r.applySevenDeuce(w)...)
+			// bounty hands auto-show: everyone sees the 7-2 was legit
+			if p := r.playerBySeat(w); p != nil {
+				evs = append(evs, Event{Type: EvHoleReveal, HandID: r.handID,
+					HoleCards: []HoleReveal{{Seat: w, Cards: p.hole}}})
+			}
+		}
+	}
+
+	r.showdownSeats = nil
+	for _, p := range r.players {
+		if p.inHand() {
+			r.showdownSeats = append(r.showdownSeats, p.seat)
 		}
 	}
 
 	evs = append(evs, r.endHand()...)
 	return evs
 }
+
+// ShowdownSeats: seats that reached showdown (empty otherwise). The table
+// layer offers each the choice to show or muck after the awards.
+func (r *HandRunner) ShowdownSeats() []int { return r.showdownSeats }
 
 // seatOrderFromButton: seats clockwise from left of button.
 func (r *HandRunner) seatOrderFromButton() []int {

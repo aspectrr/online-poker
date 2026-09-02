@@ -362,6 +362,18 @@ function IdleBar(props: {
                 {(ph) => (
                   <div class="flex items-center justify-center gap-2 rounded-2xl border border-accent/40 bg-accent-tint/60 px-4 py-2.5 backdrop-blur">
                     <span class="text-sm font-medium text-fg">Your decision:</span>
+                    <Show when={ph().reveal}>
+                      <Button size="sm" onClick={() => props.send({ kind: "reveal" })}>
+                        Show hand
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => props.send({ kind: "muck" })}
+                      >
+                        Muck
+                      </Button>
+                    </Show>
                     <Show when={ph().bounty}>
                       <Button size="sm" onClick={() => props.send({ kind: "reveal" })}>
                         Show 7-2 (take bounty)

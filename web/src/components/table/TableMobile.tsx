@@ -104,7 +104,7 @@ export function TableMobile(props: {
                 t().toAct === t().heroSeat
                   ? "border-accent/70 ring-2 ring-accent/60"
                   : "border-line/80",
-                h().isWinner && "border-success/80",
+                h().isWinner && "border-marigold bg-marigold/90",
               )}
             >
               <div class="text-[13px] font-semibold text-accent">you</div>
@@ -145,7 +145,7 @@ function OpponentChip(props: {
         acting() ? "border-accent/70" : "border-line/80",
         s().folded && "opacity-55 saturate-50",
         s().sittingOut && "opacity-60",
-        s().isWinner && "border-marigold/90",
+        s().isWinner && "border-marigold",
       )}
     >
       {/* cards: revealed faces at showdown, else card backs while in hand */}

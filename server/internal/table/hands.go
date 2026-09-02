@@ -204,6 +204,9 @@ func (t *Table) afterAdvance() {
 		if t.postHandOffered() {
 			return // waiting on winner's decision; hand_end fires after
 		}
+		if t.revealOffer() {
+			return // waiting on showdown show-or-muck choices
+		}
 		t.handEnded()
 		return
 	}
@@ -254,6 +257,65 @@ func (t *Table) lastWinnerSeat() int {
 	return t.lastWinner
 }
 
+// revealChoiceTimeout: how long a showdown player has to pick show/muck.
+const revealChoiceTimeout = 12 * time.Second
+
+// revealOffer: showdown hands are private until shown — offer every
+// showdown player the choice to reveal or muck. Returns true while any
+// choice is outstanding (hand_ended waits on them). Fold-wins never get
+// here: no showdown, nothing to show.
+func (t *Table) revealOffer() bool {
+	if t.runner == nil || len(t.runner.ShowdownSeats()) == 0 {
+		return false
+	}
+	if len(t.revealPending) == 0 {
+		t.revealPending = t.runner.ShowdownSeats()
+		for _, seat := range t.revealPending {
+			prompt := &protocol.PostHandPrompt{Seat: seat, Reveal: true}
+			if s := t.seatByNo(seat); s != nil && s.conn != nil {
+				s.conn.TrySend(protocol.ServerMsg{Type: "post_hand", Post: prompt})
+			}
+		}
+		t.revealTimer = time.AfterFunc(revealChoiceTimeout, func() {
+			t.Send(nil, protocol.ClientMsg{Type: "__reveal_timeout"})
+		})
+	}
+	return len(t.revealPending) > 0
+}
+
+// resolveShowdownReveal: a showdown seat chose. Reveal broadcasts their
+// hole cards to everyone; muck says nothing. Reports whether the seat had
+// a choice pending (consumed either way).
+func (t *Table) resolveShowdownReveal(seat int, reveal bool) bool {
+	idx := -1
+	for i, s := range t.revealPending {
+		if s == seat {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 || t.runner == nil {
+		return false
+	}
+	t.revealPending = append(t.revealPending[:idx], t.revealPending[idx+1:]...)
+	if reveal {
+		if cards := t.runner.HolesFor(seat); len(cards) > 0 {
+			t.publishEvents([]protocol.Event{{
+				Type:      protocol.EvHoleReveal,
+				HoleCards: []engine.HoleReveal{{Seat: seat, Cards: cards}},
+			}})
+		}
+	}
+	if len(t.revealPending) == 0 {
+		if t.revealTimer != nil {
+			t.revealTimer.Stop()
+			t.revealTimer = nil
+		}
+		t.handEnded()
+	}
+	return true
+}
+
 // firstTriggerMatch: first dealt card matching any trigger.
 func firstTriggerMatch(triggers []engine.CardTrigger, cards []engine.Card) (engine.Card, bool) {
 	for _, c := range cards {
@@ -286,6 +348,11 @@ func (t *Table) handEnded() {
 		t.dropTimer = nil
 	}
 	t.dropTimerRound = 0
+	if t.revealTimer != nil {
+		t.revealTimer.Stop()
+		t.revealTimer = nil
+	}
+	t.revealPending = nil
 	// a drop game deals whole extra decks (fresh board per round) — those
 	// cards would fire bomb-pot triggers nearly every time; don't feed them
 	// into the next hand's trigger match
@@ -377,6 +444,11 @@ func (t *Table) publishEvents(evs []protocol.Event) {
 	t.handEvents = append(t.handEvents, evs...)
 	for i := range evs {
 		ev := evs[i]
+		// showdown hole cards are no longer public: the table offers each
+		// player a show-or-muck choice (EvHoleReveal) after the awards
+		if ev.Type == protocol.EvShowdown && !ev.Uncontested {
+			ev.HoleCards = nil
+		}
 		t.applyEventToSeats(&ev)
 		if ev.Type == protocol.EvPotAwarded && len(ev.Winners) > 0 {
 			t.lastWinner = ev.Winners[0].Seat
@@ -602,7 +674,13 @@ func (t *Table) chat(c *ws.Client, m protocol.ClientMsg) {
 // rabbit / post-hand decisions (called from dispatch).
 func rabbitReveal(t *Table, in inbox) {
 	s := t.seatOfClient(in.client)
-	if s == nil || t.runner == nil || t.pending == nil || t.pending.Seat != s.seat {
+	if s == nil || t.runner == nil {
+		return
+	}
+	if in.msg.Reveal != nil && t.resolveShowdownReveal(s.seat, *in.msg.Reveal) {
+		return // showdown show-or-muck choice consumed
+	}
+	if t.pending == nil || t.pending.Seat != s.seat {
 		return
 	}
 	if in.msg.Reveal != nil {

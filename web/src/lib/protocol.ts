@@ -133,7 +133,7 @@ export type GameEvent = {
 
 export type ChatMsg = { seat: number; player: string; text: string };
 
-export type PostHandPrompt = { seat: number; bounty: boolean; rabbit: boolean };
+export type PostHandPrompt = { seat: number; bounty: boolean; rabbit: boolean; reveal: boolean };
 
 /** Client -> server message. */
 export type ClientMsg =
@@ -305,7 +305,7 @@ export type TableState = {
   /** armed for the NEXT hand (texas_drop_armed) */
   texasDropArmed: boolean;
   /** 7-2 reveal/muck + rabbit prompt for the hero, when offered */
-  postHand: { bounty: boolean; rabbit: boolean } | null;
+  postHand: { bounty: boolean; rabbit: boolean; reveal: boolean } | null;
   /** read-only active config for the settings drawer */
   cfg: TableConfigView;
   /** armed for the NEXT hand (bomb_pot_armed); UICard = trigger card when trigger-driven, true = manual arm */

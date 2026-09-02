@@ -15,6 +15,7 @@ const (
 	EvTurnChanged      EventType = "turn_changed"
 	EvAllInRunout      EventType = "all_in_runout"
 	EvShowdown         EventType = "showdown"
+	EvHoleReveal       EventType = "hole_reveal" // player chose to show (or 7-2 auto-show)
 	EvPotAwarded       EventType = "pot_awarded"
 	EvSevenDeuceBounty EventType = "seven_deuce_bounty"
 	EvRabbitHunt       EventType = "rabbit_hunt"

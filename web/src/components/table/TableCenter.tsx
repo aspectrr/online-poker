@@ -47,14 +47,14 @@ export function TableCenter(props: { table: TableState; dealKey: string; class?:
               "flex flex-col items-center gap-1 rounded-xl px-2 py-1",
               t().isDoubleBoard &&
                 t().boardWins.includes(row) &&
-                "animate-board-win ring-2 ring-success/80",
+                "animate-board-win ring-4 ring-marigold bg-marigold/20",
             )}
           >
             <Show when={isDouble()}>
               <span
                 class={cn(
                   "flex items-center gap-2 rounded bg-black/40 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-                  t().boardWins.includes(row) ? "text-success" : "text-fg-muted",
+                  t().boardWins.includes(row) ? "text-marigold" : "text-fg-muted",
                 )}
               >
                 {label(row)}

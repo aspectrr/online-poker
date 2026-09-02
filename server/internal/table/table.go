@@ -84,6 +84,10 @@ type Table struct {
 	// paceEvs: street-deal events held back ~1s after a street-closing
 	// action, so the next board cards don't stomp the final action's render
 	paceEvs []protocol.Event
+	// revealPending: showdown seats still deciding show-or-muck; hands stay
+	// private until each seat chooses (auto-muck on timeout)
+	revealPending []int
+	revealTimer   *time.Timer
 	// devDeals: forced hole cards per seat, consumed by the next startHand
 	// (dev builds only)
 	devDeals map[int][]engine.Card
@@ -298,6 +302,13 @@ func (t *Table) handle(in inbox) {
 		return
 	case "__drop_timeout":
 		t.onDropTimeout()
+		return
+	case "__reveal_timeout":
+		if len(t.revealPending) > 0 {
+			t.revealPending = nil
+			t.revealTimer = nil
+			t.handEnded()
+		}
 		return
 	case "__street_pace":
 		if len(t.paceEvs) > 0 {

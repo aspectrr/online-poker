@@ -225,7 +225,9 @@ function createTableStore(tableId: string): TableStore {
         setState((s) => ({
           ...s,
           postHand:
-            m.post.seat === s.heroSeat ? { bounty: m.post.bounty, rabbit: m.post.rabbit } : null,
+            m.post.seat === s.heroSeat
+              ? { bounty: m.post.bounty, rabbit: m.post.rabbit, reveal: m.post.reveal }
+              : null,
           toAct: -1,
           legal: null,
           deadlineUnixMs: null,
@@ -600,6 +602,16 @@ function createTableStore(tableId: string): TableStore {
                 : s.boardWins,
           };
         });
+        break;
+      }
+      case "hole_reveal": {
+        setState((s) => ({
+          ...s,
+          seats: s.seats.map((x) => {
+            const r = (e.hole_cards ?? []).find((h) => h.seat === x.seat);
+            return r ? { ...x, revealedCards: uiCards(r.cards) } : x;
+          }),
+        }));
         break;
       }
       case "seven_deuce_bounty":

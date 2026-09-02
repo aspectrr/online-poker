@@ -22,6 +22,7 @@ const (
 	EvTurnChanged      = engine.EvTurnChanged
 	EvAllInRunout      = engine.EvAllInRunout
 	EvShowdown         = engine.EvShowdown
+	EvHoleReveal       = engine.EvHoleReveal
 	EvPotAwarded       = engine.EvPotAwarded
 	EvSevenDeuceBounty = engine.EvSevenDeuceBounty
 	EvRabbitHunt       = engine.EvRabbitHunt

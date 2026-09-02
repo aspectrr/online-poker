@@ -79,7 +79,8 @@ type HandRunner struct {
 	headsUp      bool
 	sbIdx, bbIdx int
 
-	pendingRevealIdx int // -1 none; uncontested winner deciding reveal
+	pendingRevealIdx int   // -1 none; uncontested winner deciding reveal
+	showdownSeats    []int // seats that reached showdown (reveal choices)
 	rabbitAvailable  bool
 	rabbitTaken      bool
 	runoutAnnounced  bool // EvAllInRunout emitted once per hand

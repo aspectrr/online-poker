@@ -97,9 +97,11 @@ type ChatMsg struct {
 	Text   string `json:"text"`
 }
 
-// PostHandPrompt: uncontested-winner decision (7-2 reveal and/or rabbit).
+// PostHandPrompt: uncontested-winner decision (7-2 reveal and/or rabbit),
+// or the showdown show-or-muck choice (Reveal).
 type PostHandPrompt struct {
 	Seat   int  `json:"seat"`
-	Bounty bool `json:"bounty"` // reveal-or-muck offered
+	Bounty bool `json:"bounty"` // 7-2 reveal-or-muck offered
 	Rabbit bool `json:"rabbit"` // rabbit hunt offered
+	Reveal bool `json:"reveal"` // showdown show-or-muck offered
 }

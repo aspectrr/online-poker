@@ -121,7 +121,8 @@ export function Seat(props: {
               acting() ? "border-accent/70" : "border-line/80",
               s().folded && "opacity-55 saturate-50",
               s().sittingOut && "opacity-60",
-              s().isWinner && "border-success/80",
+              s().isWinner &&
+                "border-marigold bg-marigold text-black shadow-[0_0_32px_rgba(247,201,72,0.7)]",
             )}
             classList={{
               "ring-2 ring-accent/60 shadow-[0_0_24px_rgba(212,175,55,0.35)] animate-[glow_1.6s_ease-in-out_infinite]":
@@ -156,7 +157,7 @@ export function Seat(props: {
               <span
                 class={cn(
                   "truncate text-[13px] font-semibold",
-                  props.isHero ? "text-accent" : "text-fg",
+                  s().isWinner ? "text-black" : props.isHero ? "text-accent" : "text-fg",
                 )}
               >
                 {props.isHero ? "you" : s().player}
