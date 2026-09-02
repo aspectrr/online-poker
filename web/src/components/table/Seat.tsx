@@ -130,8 +130,11 @@ export function Seat(props: {
               "animate-landing": !!props.landing,
             }}
           >
-            {/* timer arc: svg circle around the nameplate */}
-            <Show when={acting()}>
+            {/* timer arc: svg circle around the nameplate. Hidden until this
+                seat's cards have landed — an arc over card backs mid-deal
+                just reads as broken; the +5s first-turn grace covers the
+                peek time instead */}
+            <Show when={acting() && landed() >= total()}>
               <svg
                 class="pointer-events-none absolute -inset-1.5"
                 viewBox="0 0 100 54"
