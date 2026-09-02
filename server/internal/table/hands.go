@@ -150,6 +150,10 @@ func (t *Table) startHand() {
 }
 
 // advance applies an action (or nil tick) and publishes resulting events.
+// streetPacing: hold between a street-closing action and the next board
+// cards, so the deal doesn't stomp the final action's render.
+const streetPacing = 1100 * time.Millisecond
+
 func (t *Table) advance(a *engine.Action, actor *seat) *engine.Action {
 	evs, err := t.runner.Advance(a)
 	if err != nil {
@@ -157,6 +161,26 @@ func (t *Table) advance(a *engine.Action, actor *seat) *engine.Action {
 		if actor != nil && actor.conn != nil {
 			actor.conn.TrySend(protocol.ServerMsg{Type: "error", Error: "illegal action: " + err.Error()})
 		}
+		return nil
+	}
+	// When an action closes the street, the engine batch carries the next
+	// street's deal in the same breath. Split it: actions publish now, deal
+	// events ~1s later via the inbox (keeps table state single-threaded).
+	cut := -1
+	for i := range evs {
+		if i > 0 && evs[i].Type == protocol.EvStreetDealt {
+			cut = i
+			break
+		}
+	}
+	// drop games deal their board in one batch — the client staggers those
+	// renders itself, and splitting would delay the stay/drop prompt
+	if !t.texasDrop && cut > 0 {
+		t.publishEvents(evs[:cut])
+		t.paceEvs = evs[cut:]
+		time.AfterFunc(streetPacing, func() {
+			t.Send(nil, protocol.ClientMsg{Type: "__street_pace"})
+		})
 		return nil
 	}
 	t.publishEvents(evs)

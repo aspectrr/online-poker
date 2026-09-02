@@ -185,41 +185,41 @@ export function ActionBar(props: {
       when={active()}
       fallback={<IdleBar table={t()} send={props.send} error={props.error} tip={props.tip} />}
     >
-      <div class="mx-auto w-full max-w-3xl rounded-2xl border border-line bg-surface/95 p-3 shadow-2xl shadow-black/50 backdrop-blur">
+      <div class="mx-auto w-full max-w-3xl rounded-2xl border border-line bg-surface/95 p-2.5 shadow-2xl shadow-black/50 backdrop-blur">
         <Show when={props.error}>
           <div class="mb-2 rounded-lg bg-danger/15 px-3 py-1.5 text-xs font-medium text-danger">
             {props.error}
           </div>
         </Show>
 
-        <div class="flex flex-col gap-3">
-          {/* presets row */}
-          <Show when={legal()!.canRaise}>
-            <div class="flex flex-wrap items-center gap-1.5">
-              <For each={presets()}>
-                {(p) => (
-                  <button
-                    type="button"
-                    class={cn(
-                      "rounded-lg border px-2.5 py-1 text-xs font-semibold tabular-nums transition-colors",
-                      raising() && raiseTo() === p.toCents
-                        ? "border-accent bg-accent/20 text-accent"
-                        : "border-line bg-surface-raised text-fg-muted hover:border-accent/40 hover:text-fg",
-                    )}
-                    onClick={() => applyPreset(p.toCents)}
-                  >
-                    {p.label}
-                  </button>
-                )}
-              </For>
-              <span class="ml-auto text-[11px] text-fg-muted">
-                min {money(legal()!.minRaiseToCents)} · max {money(legal()!.maxRaiseToCents)}
-              </span>
-            </div>
-
-            {/* slider + typed input — shown while raising (saves vertical space in landscape) */}
-            <Show when={raising()}>
-              <div class="grid gap-3 sm:grid-cols-[1fr_150px]">
+        <div class="flex flex-col gap-2.5">
+          {/* bet panel — only while raising; R or the Raise button opens it,
+              Enter/Confirm bets, Esc closes. Nothing here shows by default so
+              the idle bar stays one row tall. */}
+          <Show when={raising() && legal()!.canRaise}>
+            <div class="rounded-xl border border-line/70 bg-surface-raised/60 p-2.5">
+              <div class="flex flex-wrap items-center gap-1.5">
+                <For each={presets()}>
+                  {(p) => (
+                    <button
+                      type="button"
+                      class={cn(
+                        "rounded-lg border px-2.5 py-1 text-xs font-semibold tabular-nums transition-colors",
+                        raiseTo() === p.toCents
+                          ? "border-accent bg-accent/20 text-accent"
+                          : "border-line bg-surface-raised text-fg-muted hover:border-accent/40 hover:text-fg",
+                      )}
+                      onClick={() => applyPreset(p.toCents)}
+                    >
+                      {p.label}
+                    </button>
+                  )}
+                </For>
+                <span class="ml-auto text-[11px] text-fg-muted">
+                  min {money(legal()!.minRaiseToCents)} · max {money(legal()!.maxRaiseToCents)}
+                </span>
+              </div>
+              <div class="mt-2.5 grid gap-3 sm:grid-cols-[1fr_150px]">
                 <div>
                   <Slider
                     value={[raiseTo()]}
@@ -266,10 +266,10 @@ export function ActionBar(props: {
                   </span>
                 </div>
               </div>
-            </Show>
+            </div>
           </Show>
 
-          {/* main buttons */}
+          {/* main buttons — always exactly one row */}
           <div class="flex gap-2.5">
             <Button
               variant="danger"
@@ -292,40 +292,24 @@ export function ActionBar(props: {
               <Button
                 size="lg"
                 class="flex-[1.4] [@media(max-height:520px)]:h-9 [@media(max-height:520px)]:px-3 [@media(max-height:520px)]:text-sm"
-                onClick={commitRaise}
+                onClick={() => {
+                  if (raising()) commitRaise();
+                  else {
+                    setRaising(true);
+                    inputEl()?.focus();
+                  }
+                }}
               >
-                {legal()!.maxRaiseToCents === (typing() ? parseBetToCents(typed()) : raiseTo())
-                  ? "All-in"
-                  : `Raise to ${money(typing() && parseBetToCents(typed()) != null ? parseBetToCents(typed())! : raiseTo())}`}
-                <kbd class="ml-1 rounded bg-black/30 px-1 text-[10px]">R</kbd>
+                {raising()
+                  ? legal()!.maxRaiseToCents ===
+                    (typing() && parseBetToCents(typed()) != null
+                      ? parseBetToCents(typed())!
+                      : raiseTo())
+                    ? "All-in ↵"
+                    : `Confirm ${money(typing() && parseBetToCents(typed()) != null ? parseBetToCents(typed())! : raiseTo())}`
+                  : "Bet / Raise"}
+                <kbd class="ml-1 rounded bg-black/30 px-1 text-[10px]">{raising() ? "↵" : "R"}</kbd>
               </Button>
-            </Show>
-          </div>
-
-          {/* keyboard shortcuts hint (ASPTR-193d) */}
-          <div class="hidden flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[10px] text-fg-muted [@media(max-height:520px)]:hidden sm:flex">
-            <span>
-              <kbd class="rounded border border-line bg-surface-raised px-1 font-sans">F</kbd> fold
-            </span>
-            <span>
-              <kbd class="rounded border border-line bg-surface-raised px-1 font-sans">C</kbd>{" "}
-              check/call
-            </span>
-            <Show when={legal()!.canRaise}>
-              <span>
-                <kbd class="rounded border border-line bg-surface-raised px-1 font-sans">R</kbd>{" "}
-                raise
-              </span>
-            </Show>
-            <span>
-              <kbd class="rounded border border-line bg-surface-raised px-1 font-sans">↵</kbd>{" "}
-              confirm
-            </span>
-            <Show when={legal()!.canRaise}>
-              <span>
-                <kbd class="rounded border border-line bg-surface-raised px-1 font-sans">esc</kbd>{" "}
-                cancel
-              </span>
             </Show>
           </div>
         </div>

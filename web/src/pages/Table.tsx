@@ -31,8 +31,8 @@ const API_URL = import.meta.env.VITE_API_URL as string | undefined;
 /** Felt design box (16/10) — seats/center are laid out at this size, then scaled as one unit (ASPTR-193 landscape pass). */
 const DESIGN_W = 1024;
 const DESIGN_H = 640;
-/** bottom-center seat (at 95%) overhangs the box by ~half its height — budget it so the action bar never covers the hero */
-const SEAT_OVERHANG = 160;
+/** real-pixel floor reserved below the felt for the overlay action bar — independent of felt scale so the bar can never cover the hero seat */
+const BAR_RESERVE = 148;
 
 /** Ellipse seat positions (fractions of the felt box) for up to 9 seats. */
 const SEAT_POS: Record<number, [number, number][]> = {
@@ -177,7 +177,7 @@ export function TablePage() {
       if (!hostBox) return;
       const s = Math.min(
         hostBox.clientWidth / DESIGN_W,
-        hostBox.clientHeight / (DESIGN_H + SEAT_OVERHANG),
+        (hostBox.clientHeight - BAR_RESERVE) / DESIGN_H,
       );
       if (s > 0) setScale(s);
     };
@@ -442,7 +442,7 @@ export function TablePage() {
                 class="relative"
                 style={{
                   width: `${DESIGN_W * scale()}px`,
-                  height: `${(DESIGN_H + SEAT_OVERHANG) * scale()}px`,
+                  height: `${DESIGN_H * scale() + BAR_RESERVE}px`,
                 }}
               >
                 <div
@@ -513,16 +513,25 @@ export function TablePage() {
                       // guard must live in a <Show>, not an early return,
                       // or chips never appear once someone sits
                       const p = () => posFor(seat().seat);
-                      // stack chips: toward the pot but slid LEFT of the
-                      // player's card column, so they never cover cards, bets
-                      // or the board. double boards hug bets closer to players.
-                      // all positions stay reactive: heroSeat arrives with the
-                      // join snapshot and the ring must re-rotate then.
+                      // stack chips: at bet height, slid toward the nearer
+                      // side rail — beside the player's cards, never between
+                      // them and the pot. all positions stay reactive:
+                      // heroSeat arrives with the join snapshot and the ring
+                      // must re-rotate then.
                       const spread = () => (t().isDoubleBoard ? 0.62 : 0.5);
-                      const stackPos = (): [number, number] => [
-                        0.5 + (p()[0] - 0.5) * 0.55 - 56 / DESIGN_W,
-                        0.5 + (p()[1] - 0.5) * 0.55,
-                      ];
+                      const stackPos = (): [number, number] => {
+                        // side seats: their card fans fill the whole
+                        // plate->pot lane, so chips go just below the plate
+                        if (Math.abs(p()[0] - 0.5) > 0.3) return [p()[0], p()[1] + 70 / DESIGN_H];
+                        // top/bottom seats: at bet height, slid toward the
+                        // nearer side rail — beside the cards, never between
+                        // them and the pot
+                        const side = p()[0] < 0.5 ? -1 : 1;
+                        return [
+                          0.5 + (p()[0] - 0.5) * spread() + (side * 130) / DESIGN_W,
+                          0.5 + (p()[1] - 0.5) * spread() + 20 / DESIGN_H,
+                        ];
+                      };
                       const betPos = (): [number, number] => [
                         0.5 + (p()[0] - 0.5) * spread(),
                         0.5 + (p()[1] - 0.5) * spread(),

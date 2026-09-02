@@ -81,6 +81,9 @@ type Table struct {
 	dropTimerRound int
 	// graceHandNo: hand that already used its first-turn +5s deal grace
 	graceHandNo int64
+	// paceEvs: street-deal events held back ~1s after a street-closing
+	// action, so the next board cards don't stomp the final action's render
+	paceEvs []protocol.Event
 	// devDeals: forced hole cards per seat, consumed by the next startHand
 	// (dev builds only)
 	devDeals map[int][]engine.Card
@@ -295,6 +298,14 @@ func (t *Table) handle(in inbox) {
 		return
 	case "__drop_timeout":
 		t.onDropTimeout()
+		return
+	case "__street_pace":
+		if len(t.paceEvs) > 0 {
+			evs := t.paceEvs
+			t.paceEvs = nil
+			t.publishEvents(evs)
+			t.afterAdvance()
+		}
 		return
 	}
 	if _, ok := t.clients[in.client]; !ok {
