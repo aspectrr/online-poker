@@ -79,6 +79,8 @@ export type TableSnapshot = {
   your_cards?: Card[];
   to_act_seat?: number;
   deadline_unix_ms?: number;
+  rebuys_used?: number;
+  top_up_queued?: boolean;
   legal_actions?: LegalActionsWire;
   hand_in_progress: boolean;
   bomb_pot_next?: boolean;
@@ -144,7 +146,8 @@ export type ClientMsg =
   | { type: "rabbit"; reveal?: boolean }
   | { type: "bomb_pot" }
   | { type: "texas_drop" }
-  | { type: "dev_deal"; seat: number; cards: Card[] };
+  | { type: "dev_deal"; seat: number; cards: Card[] }
+  | { type: "top_up" };
 
 /** Server -> client message (tagged union on `type`). */
 export type ServerMsg =
@@ -291,6 +294,8 @@ export type TableState = {
   holeCards: UICard[][]; // per hero only, rows for double-board games
   toAct: number; // seat or -1
   deadlineUnixMs: number | null;
+  rebuysUsed: number;
+  topUpQueued: boolean;
   /** total turn-clock duration the current deadline was set from (arc math) */
   turnTimeoutMs: number;
   legal: LegalActions | null; // non-null iff toAct === heroSeat
@@ -363,6 +368,8 @@ export type TableStore = {
   armBombPot(): void;
   /** Arm a Texas Drop game for the next hand. */
   armTexasDrop(): void;
+  /** Queue a 100bb top-up; credits at the next hand start (max 3/session). */
+  topUp(): void;
   /** Force hero hole cards next hand (dev builds only). Wire card numbers. */
   devDeal(cards: WireCard[]): void;
   /** Current ws connection state. */

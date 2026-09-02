@@ -67,6 +67,8 @@ function initialState(tableId: string): TableState {
     holeCards: [],
     toAct: -1,
     deadlineUnixMs: null,
+    rebuysUsed: 0,
+    topUpQueued: false,
     turnTimeoutMs: 20000,
     legal: null,
     handNo: 0,
@@ -231,6 +233,8 @@ function createTableStore(tableId: string): TableStore {
           toAct: -1,
           legal: null,
           deadlineUnixMs: null,
+          rebuysUsed: 0,
+          topUpQueued: false,
         }));
         break;
       case "error":
@@ -288,6 +292,8 @@ function createTableStore(tableId: string): TableStore {
         holeCards: snap.your_cards?.length ? [uiCards(snap.your_cards)] : inHand ? s.holeCards : [],
         toAct: snap.to_act_seat ?? -1,
         deadlineUnixMs: snap.deadline_unix_ms || null,
+        rebuysUsed: snap.rebuys_used ?? 0,
+        topUpQueued: !!snap.top_up_queued,
         landingSeat: -1,
         turnTimeoutMs: Math.max(1000, (snap.config.action_timeout_s || 20) * 1000),
         legal,
@@ -343,6 +349,8 @@ function createTableStore(tableId: string): TableStore {
           holeCards: [],
           toAct: -1,
           deadlineUnixMs: null,
+          rebuysUsed: 0,
+          topUpQueued: false,
           legal: null,
           postHand: null,
           bombPotArmed: null,
@@ -406,6 +414,8 @@ function createTableStore(tableId: string): TableStore {
             },
             toAct: -1,
             deadlineUnixMs: null,
+            rebuysUsed: 0,
+            topUpQueued: false,
             legal: null,
             message:
               (e.round ?? 1) > 1
@@ -526,6 +536,8 @@ function createTableStore(tableId: string): TableStore {
             // turn moved on: nobody is on the clock until the next turn_changed
             toAct: -1,
             deadlineUnixMs: null,
+            rebuysUsed: 0,
+            topUpQueued: false,
             legal: seat === s.heroSeat ? null : s.legal,
             seats: s.seats.map((x) =>
               x.seat === seat
@@ -637,6 +649,8 @@ function createTableStore(tableId: string): TableStore {
           street: "complete",
           toAct: -1,
           deadlineUnixMs: null,
+          rebuysUsed: 0,
+          topUpQueued: false,
           legal: null,
           dropPhase: null,
           equities: null,
@@ -685,6 +699,9 @@ function createTableStore(tableId: string): TableStore {
     sock?.send({ type: "bomb_pot" });
   };
 
+  const topUp = () => {
+    sock?.send({ type: "top_up" });
+  };
   const armTexasDrop = () => {
     sock?.send({ type: "texas_drop" });
   };
@@ -709,6 +726,7 @@ function createTableStore(tableId: string): TableStore {
     joinSeat,
     armBombPot,
     armTexasDrop,
+    topUp,
     devDeal,
     get me() {
       return me;

@@ -50,6 +50,15 @@ func (t *Table) seatOfClient(c *ws.Client) *seat {
 // startHand: build engine seats from table seats, run the runner.
 func (t *Table) startHand() {
 	t.nextHand = nil
+	// credit queued top-ups now — never mid-hand (also when the hand can't
+	// start yet: the chips belong to the player)
+	for _, s := range t.seats {
+		if s.pendingTopUp > 0 {
+			s.stack += s.pendingTopUp
+			s.rebuys++
+			s.pendingTopUp = 0
+		}
+	}
 	if t.seatedCount() < 2 {
 		return
 	}

@@ -31,6 +31,8 @@ func (t *Table) leave(c *ws.Client) {
 	s.name = ""
 	s.conn = nil
 	s.stack = 0
+	s.pendingTopUp = 0
+	s.rebuys = 0
 	s.inHand = false
 	s.sittingOut = false
 	s.lastAction = ""
@@ -171,6 +173,8 @@ func (t *Table) snapshotFor(viewer int) *protocol.TableState {
 		if viewer >= 0 {
 			if s := t.seatByNo(viewer); s != nil {
 				st.YourCards = s.lastHoles // private: viewer's own seat only
+				st.RebuysUsed = s.rebuys
+				st.TopUpQueued = s.pendingTopUp > 0
 			}
 		}
 	}

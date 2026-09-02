@@ -138,6 +138,8 @@ export function createDemoTable(tableId: string): TableStore {
     holeCards: [],
     toAct: -1,
     deadlineUnixMs: null,
+    rebuysUsed: 0,
+    topUpQueued: false,
     legal: null,
     handNo: 0,
     message: "Taking your seat…",
@@ -373,6 +375,7 @@ export function createDemoTable(tableId: string): TableStore {
     },
     armBombPot: () => {},
     armTexasDrop: () => {},
+    topUp: () => {},
     devDeal: () => {},
     dispose: clearAll,
   };

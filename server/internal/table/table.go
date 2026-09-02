@@ -43,6 +43,9 @@ type seat struct {
 	conn       *ws.Client // current connection, nil between reconnects
 	// lastHoles: private cards for reconnect snapshot while hand running
 	lastHoles []engine.Card
+	// rebuy bookkeeping: top-ups queue here and credit at the next hand
+	pendingTopUp int64
+	rebuys       int
 }
 
 // inbox message (from clients / timers).
@@ -207,6 +210,36 @@ func (t *Table) Send(c *ws.Client, m protocol.ClientMsg) {
 	}
 }
 
+// rebuy rules: a top-up adds 100bb, max 3 per seat per session, credited
+// only at the next hand start (never mid-hand).
+const (
+	rebuysMax = 3
+	rebuyBB   = int64(100)
+)
+
+// topUp: queue a 100bb top-up for the caller, credited at the next hand.
+func (t *Table) topUp(c *ws.Client) {
+	s := t.seatOfClient(c)
+	if s == nil {
+		c.TrySend(protocol.ServerMsg{Type: "error", Error: "take a seat first"})
+		return
+	}
+	if s.stack >= rebuyBB*t.cfg.BigBlind {
+		c.TrySend(protocol.ServerMsg{Type: "error", Error: "top-up available below 100bb"})
+		return
+	}
+	if s.rebuys >= rebuysMax {
+		c.TrySend(protocol.ServerMsg{Type: "error", Error: "rebuy limit reached (3)"})
+		return
+	}
+	if s.pendingTopUp > 0 {
+		return // already queued
+	}
+	s.pendingTopUp = rebuyBB * t.cfg.BigBlind
+	t.broadcastSeats()
+	t.broadcastState()
+}
+
 // broadcastState: fresh per-viewer snapshot to every attached client.
 func (t *Table) broadcastState() {
 	for cl := range t.clients {
@@ -336,6 +369,8 @@ func (t *Table) handle(in inbox) {
 	switch in.msg.Type {
 	case "join":
 		t.join(in.client, in.msg)
+	case "top_up":
+		t.topUp(in.client)
 	case "leave":
 		t.leave(in.client)
 	case "action":
@@ -381,6 +416,8 @@ func (t *Table) join(c *ws.Client, m protocol.ClientMsg) {
 	s.stack = t.joinStack(m.Stack)
 	s.sittingOut = false
 	s.lastAction = ""
+	s.pendingTopUp = 0
+	s.rebuys = 0
 	t.broadcastSeats()
 	c.TrySend(protocol.ServerMsg{Type: "state", State: t.snapshotFor(m.Seat)})
 	t.maybeScheduleHand()

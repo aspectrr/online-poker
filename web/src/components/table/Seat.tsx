@@ -27,6 +27,8 @@ export function Seat(props: {
   dealDy: number;
   /** first-to-act landing pulse right after the opening deal */
   landing?: boolean;
+  /** hero only: queue a 100bb top-up (button renders under the plate) */
+  onTopUp?: () => void;
   /** hero only: cards hidden until held (peek) */
   peeking?: boolean;
   /** hero only: hold/release to peek at your cards */
@@ -102,6 +104,34 @@ export function Seat(props: {
             dealDx={props.dealDx}
             dealDy={props.dealDy}
           />
+        </Show>
+      </Show>
+
+      {/* top-up offer: hero only, below 100bb, 3 per session, credits next hand */}
+      <Show
+        when={
+          props.isHero &&
+          props.onTopUp &&
+          !empty() &&
+          s().stackCents < 100 * t().bbCents &&
+          t().rebuysUsed < 3
+        }
+      >
+        <Show
+          when={!t().topUpQueued}
+          fallback={
+            <span class="rounded-full border border-marigold/50 bg-marigold/10 px-2.5 py-0.5 text-[11px] font-semibold text-marigold">
+              Top-up next hand
+            </span>
+          }
+        >
+          <button
+            type="button"
+            class="rounded-full border border-marigold/60 bg-marigold/15 px-2.5 py-0.5 text-[11px] font-bold text-marigold transition-colors hover:bg-marigold/25"
+            onClick={() => props.onTopUp?.()}
+          >
+            + Top up 100bb · {3 - t().rebuysUsed} left
+          </button>
         </Show>
       </Show>
 

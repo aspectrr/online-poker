@@ -2,7 +2,7 @@ package protocol
 
 // ClientMsg is everything a client can send. Exactly one command per msg.
 type ClientMsg struct {
-	Type   string `json:"type"` // join | leave | action | chat | rabbit | bomb_pot | texas_drop | dev_deal
+	Type   string `json:"type"` // join | leave | action | chat | rabbit | bomb_pot | texas_drop | dev_deal | top_up
 	Seat   int    `json:"seat,omitempty"`
 	Name   string `json:"name,omitempty"`
 	Stack  int64  `json:"stack,omitempty"` // join: requested buy-in in cents (clamped server-side)
@@ -49,6 +49,8 @@ type TableState struct {
 	DropRound      int           `json:"drop_round,omitempty"`      // current drop round, 1-based
 	DropWaiting    int           `json:"drop_waiting,omitempty"`    // seats yet to stay/drop
 	DropDecided    bool          `json:"drop_decided,omitempty"`    // viewer already decided this round
+	RebuysUsed     int           `json:"rebuys_used,omitempty"`     // viewer's top-ups this session
+	TopUpQueued    bool          `json:"top_up_queued,omitempty"`   // viewer's top-up credits next hand
 }
 
 // ConfigWire: subset of table config the client renders (settings drawer).

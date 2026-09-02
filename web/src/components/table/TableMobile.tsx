@@ -23,6 +23,8 @@ export function TableMobile(props: {
   onTakeSeat: (seat?: number) => void;
   msLeftFor: (seat: number) => number | null;
   fracFor: (seat: number) => number;
+  /** queue a 100bb top-up for the hero (button under the hero plate) */
+  onTopUp?: () => void;
 }) {
   const t = () => props.table;
   const opponents = () => t().seats.filter((s) => s.player && s.seat !== t().heroSeat);
@@ -108,6 +110,22 @@ export function TableMobile(props: {
               )}
             >
               <div class="text-[13px] font-semibold text-accent">you</div>
+              <Show when={h().stackCents < 100 * t().bbCents && t().rebuysUsed < 3}>
+                <Show
+                  when={!t().topUpQueued}
+                  fallback={
+                    <span class="text-[10px] font-semibold text-marigold">Top-up next hand</span>
+                  }
+                >
+                  <button
+                    type="button"
+                    class="rounded-full border border-marigold/60 bg-marigold/15 px-2 py-0.5 text-[10px] font-bold text-marigold"
+                    onClick={() => props.onTopUp?.()}
+                  >
+                    + Top up 100bb · {3 - t().rebuysUsed} left
+                  </button>
+                </Show>
+              </Show>
               <div class="flex items-baseline gap-2">
                 <span class="text-[13px] font-bold tabular-nums">{money(h().stackCents)}</span>
                 <Show when={h().betCents > 0}>

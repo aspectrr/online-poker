@@ -485,6 +485,7 @@ export function TablePage() {
                         <Seat
                           seat={seat()}
                           table={t()}
+                          onTopUp={() => store.topUp()}
                           msLeft={msLeftFor(seat().seat)}
                           frac={fracFor(seat().seat)}
                           isHero={seat().seat === t().heroSeat}
@@ -552,6 +553,7 @@ export function TablePage() {
         >
           <div class="h-full w-full">
             <TableMobile
+              onTopUp={() => store.topUp()}
               table={t()}
               joinable={store.status === "open" && t().heroSeat < 0}
               peeking={heroPeeking()}
