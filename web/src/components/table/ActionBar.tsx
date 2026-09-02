@@ -77,13 +77,15 @@ export function ActionBar(props: {
 
   const applyPreset = (to: number) => {
     setRaising(true);
+    setTyping(false);
+    setTyped("");
     setRaiseTo(Math.round(to));
   };
 
   const commitRaise = () => {
     const la = legal();
     if (!la) return;
-    const to = typing() ? parseBetToCents(typed()) : raiseTo();
+    const to = typing() && typed().trim() !== "" ? parseBetToCents(typed()) : raiseTo();
     if (to == null || to < la.minRaiseToCents || to > la.maxRaiseToCents) return;
     props.send({ kind: "raise", toCents: to });
     setRaising(false);

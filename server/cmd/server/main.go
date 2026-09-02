@@ -92,7 +92,7 @@ func main() {
 				BlindsSBBB:       []int64{10, 20},
 				StartingStackBB:  200,
 				ActionTimeoutS:   90,
-				InterHandDelayS:  5,
+				InterHandDelayS:  10,
 				RIT:              "always",
 				RabbitHunt:       true,
 				BombPotMode:      "trigger",

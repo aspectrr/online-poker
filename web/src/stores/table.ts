@@ -39,7 +39,7 @@ const emptySeat = (seat: number): TableState["seats"][number] => ({
 
 const defaultCfg = (): TableState["cfg"] => ({
   actionTimeoutS: 15,
-  interHandDelayS: 5,
+  interHandDelayS: 10,
   rit: "never",
   rabbitHunt: false,
   sevenDeuce: false,
@@ -96,7 +96,9 @@ function initialState(tableId: string): TableState {
  */
 const mergeSeatView = (s: TableState) => (w: SeatWire) => {
   const prev = s.seats.find((x) => x.seat === w.seat);
-  return { ...uiSeat(w), revealedCards: prev?.revealedCards };
+  // preserve client-only overlays: the frame trails the event batch, so
+  // pot_awarded's winner flag would otherwise be wiped instantly
+  return { ...uiSeat(w), revealedCards: prev?.revealedCards, isWinner: prev?.isWinner };
 };
 
 function createTableStore(tableId: string): TableStore {
@@ -247,7 +249,7 @@ function createTableStore(tableId: string): TableStore {
       const c = snap.config;
       const cfg: TableState["cfg"] = {
         actionTimeoutS: c.action_timeout_s,
-        interHandDelayS: c.inter_hand_delay_s ?? 5,
+        interHandDelayS: c.inter_hand_delay_s ?? 10,
         rit: c.rit ?? "never",
         rabbitHunt: c.rabbit_hunt ?? false,
         sevenDeuce: c.seven_deuce ?? false,

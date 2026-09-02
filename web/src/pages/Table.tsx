@@ -523,14 +523,12 @@ export function TablePage() {
                         // side seats: their card fans fill the whole
                         // plate->pot lane, so chips go just below the plate
                         if (Math.abs(p()[0] - 0.5) > 0.3) return [p()[0], p()[1] + 70 / DESIGN_H];
-                        // top/bottom seats: at bet height, slid toward the
-                        // nearer side rail — beside the cards, never between
-                        // them and the pot
+                        // top/bottom seats: hug the plate — just beside it,
+                        // at card height for the hero — so the chips read as
+                        // that player's, not as loose pot chips
                         const side = p()[0] < 0.5 ? -1 : 1;
-                        return [
-                          0.5 + (p()[0] - 0.5) * spread() + (side * 130) / DESIGN_W,
-                          0.5 + (p()[1] - 0.5) * spread() + 20 / DESIGN_H,
-                        ];
+                        const inward = p()[1] < 0.5 ? 55 : -55;
+                        return [p()[0] + (side * 130) / DESIGN_W, p()[1] + inward / DESIGN_H];
                       };
                       const betPos = (): [number, number] => [
                         0.5 + (p()[0] - 0.5) * spread(),
