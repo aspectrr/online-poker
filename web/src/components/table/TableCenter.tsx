@@ -23,6 +23,9 @@ export function TableCenter(props: { table: TableState; dealKey: string; class?:
     <div
       class={cn(
         "pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3",
+        // two board rows + labels are tall — scale down so bet chips and the
+        // pot pill don't sit on the cards
+        t().isDoubleBoard && "scale-[0.82]",
         props.class,
       )}
     >
@@ -44,14 +47,14 @@ export function TableCenter(props: { table: TableState; dealKey: string; class?:
               "flex flex-col items-center gap-1 rounded-xl px-2 py-1",
               t().isDoubleBoard &&
                 t().boardWins.includes(row) &&
-                "animate-board-win ring-2 ring-success/80",
+                "animate-board-win ring-4 ring-marigold bg-marigold/20",
             )}
           >
             <Show when={isDouble()}>
               <span
                 class={cn(
                   "flex items-center gap-2 rounded bg-black/40 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-                  t().boardWins.includes(row) ? "text-success" : "text-fg-muted",
+                  t().boardWins.includes(row) ? "text-marigold" : "text-fg-muted",
                 )}
               >
                 {label(row)}
@@ -63,22 +66,24 @@ export function TableCenter(props: { table: TableState; dealKey: string; class?:
               </span>
             </Show>
             <div class="flex items-center gap-1.5">
-              {/* dealt cards: keyed by card identity — only new ones mount+animate */}
-              <For each={cards()}>
+              {/* dealt cards: Index (positional) — street events replace the
+                  array, so For would remount + re-animate the whole row every
+                  street; only the NEW card mounts and animates */}
+              <Index each={cards()}>
                 {(card, i) => (
-                  <div class="animate-deal" style={dealDelay(i(), 110)}>
+                  <div class="animate-deal" style={dealDelay(i, 110)}>
                     <CardRow
-                      cards={[card]}
+                      cards={[card()]}
                       size="sm"
                       revealed
                       class={cn(
                         "shadow-lg shadow-black/40",
-                        card.rabbit && "opacity-55 -rotate-6 saturate-50",
+                        card().rabbit && "opacity-55 -rotate-6 saturate-50",
                       )}
                     />
                   </div>
                 )}
-              </For>
+              </Index>
               {/* remaining empty slots */}
               <For each={slotsAfter(cards())}>
                 {() => (

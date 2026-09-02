@@ -43,6 +43,9 @@ type seat struct {
 	conn       *ws.Client // current connection, nil between reconnects
 	// lastHoles: private cards for reconnect snapshot while hand running
 	lastHoles []engine.Card
+	// rebuy bookkeeping: top-ups queue here and credit at the next hand
+	pendingTopUp int64
+	rebuys       int
 }
 
 // inbox message (from clients / timers).
@@ -72,6 +75,22 @@ type Table struct {
 	forceBombPot bool
 	// bombPot: the CURRENT hand is a bomb pot (for reconnect snapshots)
 	bombPot bool
+	// forceTexasDrop: next hand is a Texas Drop game (manual arm, texas_drop msg)
+	forceTexasDrop bool
+	// texasDrop: the CURRENT hand is a Texas Drop game (snapshots)
+	texasDrop bool
+	// dropTimer: stay/drop decision timeout for the round in dropTimerRound
+	dropTimer      *time.Timer
+	dropTimerRound int
+	// graceHandNo: hand that already used its first-turn +5s deal grace
+	graceHandNo int64
+	// paceEvs: street-deal events held back ~1s after a street-closing
+	// action, so the next board cards don't stomp the final action's render
+	paceEvs []protocol.Event
+	// revealPending: showdown seats still deciding show-or-muck; hands stay
+	// private until each seat chooses (auto-muck on timeout)
+	revealPending []int
+	revealTimer   *time.Timer
 	// devDeals: forced hole cards per seat, consumed by the next startHand
 	// (dev builds only)
 	devDeals map[int][]engine.Card
@@ -111,6 +130,12 @@ func engineConfig(row store.GameTable) engine.TableConfig {
 		RabbitHunt:          row.Config.RabbitHunt,
 		BombPotEveryNHands:  0,
 		BombPotCardTriggers: triggersToEngine(row.Config.BombPotTriggers),
+	}
+	// Texas Drop ante: stored value, else the house default 2.5×BB
+	// (50¢ at 10/20 — the game this table hosts it for).
+	cfg.TexasDropAnte = row.Config.TexasDropAnte
+	if cfg.TexasDropAnte == 0 {
+		cfg.TexasDropAnte = bb * 5 / 2
 	}
 	// 7-2 is NLHE-only in the engine; don't arm it on PLO4 tables.
 	if row.GameType == "NLHE" {
@@ -185,6 +210,47 @@ func (t *Table) Send(c *ws.Client, m protocol.ClientMsg) {
 	}
 }
 
+// rebuy rules: a top-up adds 100bb, max 3 per seat per session, credited
+// only at the next hand start (never mid-hand).
+const (
+	rebuysMax = 3
+	rebuyBB   = int64(100)
+)
+
+// topUp: queue a 100bb top-up for the caller, credited at the next hand.
+func (t *Table) topUp(c *ws.Client) {
+	s := t.seatOfClient(c)
+	if s == nil {
+		c.TrySend(protocol.ServerMsg{Type: "error", Error: "take a seat first"})
+		return
+	}
+	if s.stack >= rebuyBB*t.cfg.BigBlind {
+		c.TrySend(protocol.ServerMsg{Type: "error", Error: "top-up available below 100bb"})
+		return
+	}
+	if s.rebuys >= rebuysMax {
+		c.TrySend(protocol.ServerMsg{Type: "error", Error: "rebuy limit reached (3)"})
+		return
+	}
+	if s.pendingTopUp > 0 {
+		return // already queued
+	}
+	s.pendingTopUp = rebuyBB * t.cfg.BigBlind
+	t.broadcastSeats()
+	t.broadcastState()
+}
+
+// broadcastState: fresh per-viewer snapshot to every attached client.
+func (t *Table) broadcastState() {
+	for cl := range t.clients {
+		seat := -1
+		if s := t.seatOfClient(cl); s != nil {
+			seat = s.seat
+		}
+		cl.TrySend(protocol.ServerMsg{Type: "state", State: t.snapshotFor(seat)})
+	}
+}
+
 // Close stops the table goroutine.
 func (t *Table) Close() { t.once.Do(t.stop) }
 
@@ -215,6 +281,9 @@ func (t *Table) run() {
 			}
 			if t.nextHand != nil {
 				t.nextHand.Stop()
+			}
+			if t.dropTimer != nil {
+				t.dropTimer.Stop()
 			}
 			return
 		case in := <-t.inbox:
@@ -275,6 +344,24 @@ func (t *Table) handle(in inbox) {
 		t.timeoutSeat = in.msg.Seat
 		t.onPostTimeout()
 		return
+	case "__drop_timeout":
+		t.onDropTimeout()
+		return
+	case "__reveal_timeout":
+		if len(t.revealPending) > 0 {
+			t.revealPending = nil
+			t.revealTimer = nil
+			t.handEnded()
+		}
+		return
+	case "__street_pace":
+		if len(t.paceEvs) > 0 {
+			evs := t.paceEvs
+			t.paceEvs = nil
+			t.publishEvents(evs)
+			t.afterAdvance()
+		}
+		return
 	}
 	if _, ok := t.clients[in.client]; !ok {
 		return
@@ -282,6 +369,8 @@ func (t *Table) handle(in inbox) {
 	switch in.msg.Type {
 	case "join":
 		t.join(in.client, in.msg)
+	case "top_up":
+		t.topUp(in.client)
 	case "leave":
 		t.leave(in.client)
 	case "action":
@@ -292,6 +381,8 @@ func (t *Table) handle(in inbox) {
 		rabbitReveal(t, in)
 	case "bomb_pot":
 		t.armBombPot()
+	case "texas_drop":
+		t.armTexasDrop()
 	case "dev_deal":
 		t.devDeal(in)
 	default:
@@ -325,6 +416,8 @@ func (t *Table) join(c *ws.Client, m protocol.ClientMsg) {
 	s.stack = t.joinStack(m.Stack)
 	s.sittingOut = false
 	s.lastAction = ""
+	s.pendingTopUp = 0
+	s.rebuys = 0
 	t.broadcastSeats()
 	c.TrySend(protocol.ServerMsg{Type: "state", State: t.snapshotFor(m.Seat)})
 	t.maybeScheduleHand()
@@ -357,12 +450,24 @@ func (t *Table) broadcastEvent(ev protocol.Event) {
 
 // armBombPot: manual arm (bomb_pot msg) — next hand is a double-board bomb pot.
 func (t *Table) armBombPot() {
-	if t.forceBombPot {
+	if t.forceBombPot || t.forceTexasDrop || (t.runner != nil && t.texasDrop) {
 		return
 	}
 	t.forceBombPot = true
 	log.Printf("table %s: bomb pot armed manually", t.row.ID)
 	t.broadcastEvent(protocol.Event{Type: protocol.EvBombPotArmed})
+}
+
+// armTexasDrop: manual arm (texas_drop msg) — next hand is a Texas Drop game.
+// Supersedes an armed bomb pot; ignored while a drop game is running.
+func (t *Table) armTexasDrop() {
+	if t.forceTexasDrop || (t.runner != nil && t.texasDrop) {
+		return
+	}
+	t.forceTexasDrop = true
+	t.forceBombPot = false
+	log.Printf("table %s: texas drop armed manually", t.row.ID)
+	t.broadcastEvent(protocol.Event{Type: protocol.EvTexasDropArmed})
 }
 
 // devDeal: force this seat's hole cards next hand (DEV_AUTH tables only).

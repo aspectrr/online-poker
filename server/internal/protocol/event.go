@@ -22,11 +22,17 @@ const (
 	EvTurnChanged      = engine.EvTurnChanged
 	EvAllInRunout      = engine.EvAllInRunout
 	EvShowdown         = engine.EvShowdown
+	EvHoleReveal       = engine.EvHoleReveal
 	EvPotAwarded       = engine.EvPotAwarded
 	EvSevenDeuceBounty = engine.EvSevenDeuceBounty
 	EvRabbitHunt       = engine.EvRabbitHunt
 	EvHandEnded        = engine.EvHandEnded
 	EvBombPotArmed     = engine.EvBombPotArmed
+	EvTexasDropArmed   = engine.EvTexasDropArmed
+	EvDropDecide       = engine.EvDropDecide
+	EvDropDecided      = engine.EvDropDecided
+	EvDropReveal       = engine.EvDropReveal
+	EvDropReplenish    = engine.EvDropReplenish
 )
 
 type (

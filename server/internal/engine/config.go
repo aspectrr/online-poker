@@ -62,6 +62,17 @@ type TableConfig struct {
 	// hand's DealtCards() — the engine itself is per-hand stateless.
 	BombPot bool
 
+	// TexasDrop: this hand is a Texas Drop game — everyone antes, a board
+	// runs out, then each player secretly chooses stay (best hand among
+	// stayers takes the pot) or drop (muck out). Multiple stayers replenish
+	// the pot (each loser matches the pot amount) and a fresh board runs;
+	// sole stayer takes the pot and the game ends. One HandRunner spans
+	// every round.
+	TexasDrop bool
+	// TexasDropAnte: ante per player at drop-game entry and on every
+	// nobody-stayed re-ante (cents).
+	TexasDropAnte int64
+
 	// ButtonSeat: seat index of the button for this hand.
 	ButtonSeat int
 
@@ -128,6 +139,20 @@ const (
 	RITAlways = "always"
 )
 
+// ValidateTexasDrop: drop-game config invariants (called from Validate).
+func (t *TableConfig) ValidateTexasDrop() error {
+	if !t.TexasDrop {
+		return nil
+	}
+	if t.BombPot || t.Game != NLHE {
+		return fmt.Errorf("texas drop is NLHE-only and mutually exclusive with bomb pot")
+	}
+	if t.TexasDropAnte <= 0 {
+		return fmt.Errorf("texas drop ante must be positive, got %d", t.TexasDropAnte)
+	}
+	return nil
+}
+
 func (t *TableConfig) Validate() error {
 	if t.SmallBlind <= 0 || t.BigBlind <= 0 {
 		return fmt.Errorf("blinds must be positive, got sb=%d bb=%d", t.SmallBlind, t.BigBlind)
@@ -151,7 +176,7 @@ func (t *TableConfig) Validate() error {
 			return fmt.Errorf("trigger[%d]: %w", i, err)
 		}
 	}
-	return nil
+	return t.ValidateTexasDrop()
 }
 
 // SevenDeuceConfig: every dealt-in player (except winner) pays bounty to a
@@ -188,6 +213,8 @@ const (
 	Reveal
 	Muck
 	RabbitHunt
+	Stay    // Texas Drop: keep your hand in the game
+	DropOut // Texas Drop: muck out (renamed from Drop to avoid clashing with Street.Drop)
 )
 
 func (a ActionKind) String() string {
@@ -206,6 +233,10 @@ func (a ActionKind) String() string {
 		return "muck"
 	case RabbitHunt:
 		return "rabbithunt"
+	case Stay:
+		return "stay"
+	case DropOut:
+		return "drop"
 	}
 	return "?"
 }
@@ -221,7 +252,7 @@ func (a *ActionKind) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &s); err != nil {
 		return err
 	}
-	for k := Fold; k <= RabbitHunt; k++ {
+	for k := Fold; k <= DropOut; k++ {
 		if k.String() == s {
 			*a = k
 			return nil

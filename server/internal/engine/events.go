@@ -15,6 +15,7 @@ const (
 	EvTurnChanged      EventType = "turn_changed"
 	EvAllInRunout      EventType = "all_in_runout"
 	EvShowdown         EventType = "showdown"
+	EvHoleReveal       EventType = "hole_reveal" // player chose to show (or 7-2 auto-show)
 	EvPotAwarded       EventType = "pot_awarded"
 	EvSevenDeuceBounty EventType = "seven_deuce_bounty"
 	EvRabbitHunt       EventType = "rabbit_hunt"
@@ -24,7 +25,27 @@ const (
 	// next hand will be a bomb pot — via card trigger match or manual arm.
 	// Cards carries the matching trigger card when trigger-driven.
 	EvBombPotArmed EventType = "bomb_pot_armed"
+
+	// Texas Drop (table layer emits EvTexasDropArmed when the next hand is
+	// armed; the rest come from the engine's multi-round drop loop).
+	EvTexasDropArmed EventType = "texas_drop_armed" // next hand will be a drop game
+	EvDropDecide     EventType = "drop_decide"      // board out — stay/drop decisions open
+	EvDropDecided    EventType = "drop_decided"     // PRIVATE ack to one seat: decision locked
+	EvDropReveal     EventType = "drop_reveal"      // all in — decisions + pot resolution follow
+	EvDropReplenish  EventType = "drop_replenish"   // losing stayer matches the pot
 )
+
+// DropDecision: one seat's revealed stay/drop choice.
+type DropDecision struct {
+	Seat int  `json:"seat"`
+	Stay bool `json:"stay"`
+}
+
+// Equity: expected share of the pot at an all-in runout, 0-100.
+type Equity struct {
+	Seat int `json:"seat"`
+	Pct  int `json:"pct"`
+}
 
 type Winner struct {
 	Seat       int    `json:"seat"`
@@ -51,6 +72,7 @@ type Event struct {
 	HandID         int64        `json:"hand_id"`
 	Street         string       `json:"street,omitempty"`
 	BombPot        bool         `json:"bomb_pot,omitempty"`
+	TexasDrop      bool         `json:"texas_drop,omitempty"`
 	Seat           int          `json:"seat,omitempty"` // actor / recipient
 	Player         string       `json:"player,omitempty"`
 	Amount         int64        `json:"amount,omitempty"` // chips moved / bet
@@ -68,6 +90,13 @@ type Event struct {
 	Stacks         []FinalStack `json:"stacks,omitempty"`
 	Reason         string       `json:"reason,omitempty"`
 	Uncontested    bool         `json:"uncontested,omitempty"`
+	// Texas Drop fields.
+	Round     int            `json:"round,omitempty"`     // drop round, 1-based
+	Waiting   int            `json:"waiting,omitempty"`   // seats yet to decide
+	Stay      bool           `json:"stay,omitempty"`      // drop_decided ack
+	Decisions []DropDecision `json:"decisions,omitempty"` // drop_reveal
+	// AllInRunout: each in-hand player's expected pot share, 0-100.
+	Equities []Equity `json:"equities,omitempty"`
 	// ButtonSeat: hand_started only — where the dealer button sits this hand.
 	// Pointer so seat 0 survives omitempty (clients animate the button move).
 	ButtonSeat *int `json:"button_seat,omitempty"`

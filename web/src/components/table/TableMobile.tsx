@@ -23,6 +23,8 @@ export function TableMobile(props: {
   onTakeSeat: (seat?: number) => void;
   msLeftFor: (seat: number) => number | null;
   fracFor: (seat: number) => number;
+  /** queue a 100bb top-up for the hero (button under the hero plate) */
+  onTopUp?: () => void;
 }) {
   const t = () => props.table;
   const opponents = () => t().seats.filter((s) => s.player && s.seat !== t().heroSeat);
@@ -85,6 +87,7 @@ export function TableMobile(props: {
               <div class="relative">
                 <HeroHand
                   cards={heroCards()!.slice(0, heroDealt())}
+                  total={t().dealTotal}
                   revealed={!!props.peeking || handOver()}
                   interactive
                   peeking={props.peeking}
@@ -103,10 +106,26 @@ export function TableMobile(props: {
                 t().toAct === t().heroSeat
                   ? "border-accent/70 ring-2 ring-accent/60"
                   : "border-line/80",
-                h().isWinner && "border-success/80",
+                h().isWinner && "border-marigold bg-marigold/90",
               )}
             >
               <div class="text-[13px] font-semibold text-accent">you</div>
+              <Show when={h().stackCents < 100 * t().bbCents && t().rebuysUsed < 3}>
+                <Show
+                  when={!t().topUpQueued}
+                  fallback={
+                    <span class="text-[10px] font-semibold text-marigold">Top-up next hand</span>
+                  }
+                >
+                  <button
+                    type="button"
+                    class="rounded-full border border-marigold/60 bg-marigold/15 px-2 py-0.5 text-[10px] font-bold text-marigold"
+                    onClick={() => props.onTopUp?.()}
+                  >
+                    + Top up 100bb · {3 - t().rebuysUsed} left
+                  </button>
+                </Show>
+              </Show>
               <div class="flex items-baseline gap-2">
                 <span class="text-[13px] font-bold tabular-nums">{money(h().stackCents)}</span>
                 <Show when={h().betCents > 0}>
@@ -144,7 +163,7 @@ function OpponentChip(props: {
         acting() ? "border-accent/70" : "border-line/80",
         s().folded && "opacity-55 saturate-50",
         s().sittingOut && "opacity-60",
-        s().isWinner && "border-success/80",
+        s().isWinner && "border-marigold",
       )}
     >
       {/* cards: revealed faces at showdown, else card backs while in hand */}
@@ -184,6 +203,11 @@ function OpponentChip(props: {
         <Show when={s().betCents > 0}>
           <span class="truncate text-[10px] font-semibold tabular-nums text-accent">
             {money(s().betCents)}
+          </span>
+        </Show>
+        <Show when={props.table.equities && props.table.equities[s().seat] != null}>
+          <span class="rounded bg-black/60 px-1 text-[9px] font-bold tabular-nums text-white">
+            {props.table.equities![s().seat]}%
           </span>
         </Show>
         <Show when={s().lastAction}>

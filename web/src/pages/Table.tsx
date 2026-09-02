@@ -3,6 +3,7 @@ import {
   createComputed,
   createEffect,
   For,
+  Index,
   on,
   onCleanup,
   onMount,
@@ -30,8 +31,8 @@ const API_URL = import.meta.env.VITE_API_URL as string | undefined;
 /** Felt design box (16/10) — seats/center are laid out at this size, then scaled as one unit (ASPTR-193 landscape pass). */
 const DESIGN_W = 1024;
 const DESIGN_H = 640;
-/** bottom-center seat (at 95%) overhangs the box by ~half its height — budget it so the action bar never covers the hero */
-const SEAT_OVERHANG = 84;
+/** real-pixel floor reserved below the felt for the overlay action bar — independent of felt scale so the bar can never cover the hero seat */
+const BAR_RESERVE = 148;
 
 /** Ellipse seat positions (fractions of the felt box) for up to 9 seats. */
 const SEAT_POS: Record<number, [number, number][]> = {
@@ -139,6 +140,19 @@ export function TablePage() {
   const compact = useCompact();
   const positions = () => SEAT_POS[Math.min(t().maxSeats, 9)] ?? SEAT_POS[6];
 
+  /** Seat ellipse position rotated so the seated viewer (hero) always sits
+   *  at the bottom-center slot, whatever seat they picked; spectators see
+   *  the table unrotated. */
+  const posFor = (seatNo: number): [number, number] => {
+    const arr = positions();
+    const n = arr.length;
+    const hero = t().heroSeat;
+    const idx = hero >= 0 && hero < n ? (((seatNo - hero) % n) + n) % n : seatNo % n;
+    return arr[idx] ?? [0.5, 0.5];
+  };
+  /** per-seat positions for the dealer button (indexed by seat order). */
+  const seatPositions = (): [number, number][] => t().seats.map((s) => posFor(s.seat));
+
   const deadline = () => t().deadlineUnixMs;
   const fracFor = (seat: number) => {
     const dl = deadline();
@@ -156,12 +170,14 @@ export function TablePage() {
   const [scale, setScale] = createSignal(1);
   // eslint-disable-next-line no-unassigned-vars -- Solid ref capture assigns this
   let hostBox: HTMLDivElement | undefined;
+  // eslint-disable-next-line no-unassigned-vars -- Solid ref capture assigns this
+  let footerEl: HTMLElement | undefined;
   onMount(() => {
     const measure = () => {
       if (!hostBox) return;
       const s = Math.min(
         hostBox.clientWidth / DESIGN_W,
-        hostBox.clientHeight / (DESIGN_H + SEAT_OVERHANG),
+        (hostBox.clientHeight - BAR_RESERVE) / DESIGN_H,
       );
       if (s > 0) setScale(s);
     };
@@ -207,6 +223,28 @@ export function TablePage() {
     ),
   );
 
+  // card visibility preference: hold-to-peek (default) or always open.
+  // Client-local (localStorage) — not part of the table config.
+  const [cardsOpen, setCardsOpen] = createSignal(localStorage.getItem("rr:cards") === "open");
+  const setCardPref = (open: boolean) => {
+    setCardsOpen(open);
+    localStorage.setItem("rr:cards", open ? "open" : "hold");
+  };
+  const heroPeeking = () => cardsOpen() || peeking();
+  // one-time tip until the player has peeked at least once
+  const [everPeeked, setEverPeeked] = createSignal(localStorage.getItem("rr:peeked") === "1");
+  const setPeeked = (v: boolean) => {
+    setPeeking(v);
+    if (v) {
+      localStorage.setItem("rr:peeked", "1");
+      setEverPeeked(true);
+    }
+  };
+  const peekTip = () =>
+    !cardsOpen() && !everPeeked() && t().holeCards.length > 0
+      ? "tip: press and hold your cards to peek at them"
+      : null;
+
   // reconnect banner (ASPTR-193): surface ws drops; suppress the initial connecting flash
   const [everOpen, setEverOpen] = createSignal(false);
   createComputed(() => {
@@ -243,6 +281,9 @@ export function TablePage() {
             </Show>
             <Show when={t().bombPot}>
               <span class="font-bold text-accent">BOMB · </span>
+            </Show>
+            <Show when={t().texasDrop}>
+              <span class="font-bold text-accent">DROP · </span>
             </Show>
             {t().street}
           </span>
@@ -317,10 +358,11 @@ export function TablePage() {
         </div>
       </header>
 
-      {/* reconnect banner (ASPTR-193): store auto-reconnects; this just surfaces it */}
+      {/* reconnect banner (ASPTR-193): store auto-reconnects; this just surfaces it.
+          Header-strip placement — over the felt it covered the top seat. */}
       <Show when={showReconnect()}>
-        <div class="absolute inset-x-0 top-12 z-40 flex justify-center [@media(max-height:520px)]:top-10">
-          <div class="animate-in-pop flex items-center gap-2 rounded-full border border-marigold/70 bg-surface/95 px-4 py-1.5 shadow-lg">
+        <div class="pointer-events-none absolute inset-x-0 top-1 z-50 flex justify-center [@media(max-height:520px)]:top-0.5">
+          <div class="animate-in-pop flex items-center gap-2 rounded-full border border-marigold/70 bg-surface/95 px-3.5 py-1 shadow-lg">
             <span class="relative flex size-2">
               <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-marigold opacity-75" />
               <span class="relative inline-flex size-2 rounded-full bg-marigold" />
@@ -332,11 +374,38 @@ export function TablePage() {
         </div>
       </Show>
 
-      {/* bomb pot banners: armed-for-next-hand (persistent) + live hand */}
-      <Show when={t().bombPot || t().bombPotArmed != null}>
-        <div class="pointer-events-none absolute inset-x-0 top-14 z-40 flex justify-center">
+      {/* Texas Drop banners: armed-for-next-hand + live game (round counter).
+          Header-strip placement — over the felt they covered the top seat. */}
+      <Show when={t().banner === "drop" || t().banner === "drop_armed"}>
+        <div class="pointer-events-none absolute inset-x-0 top-1 z-50 flex justify-center">
           <Show
-            when={t().bombPot}
+            when={t().banner === "drop"}
+            fallback={
+              <div class="animate-in-pop rounded-xl border border-accent/70 bg-surface/95 px-4 py-2 text-center shadow-lg">
+                <div class="text-sm font-bold tracking-wide text-accent">NEXT HAND: TEXAS DROP</div>
+                <div class="text-[11px] text-fg-muted">
+                  everyone antes {money(t().cfg.texasDropAnte)} · board runs out · stay or drop
+                </div>
+              </div>
+            }
+          >
+            <div class="animate-in-pop rounded-xl border border-accent/70 bg-surface/95 px-4 py-2 text-center shadow-lg">
+              <div class="text-sm font-bold tracking-wide text-accent">TEXAS DROP</div>
+              <div class="text-[11px] text-fg-muted">
+                {t().dropPhase
+                  ? `round ${t().dropPhase?.round} — ${t().dropPhase?.waiting} still to choose`
+                  : "board incoming"}
+              </div>
+            </div>
+          </Show>
+        </div>
+      </Show>
+
+      {/* bomb pot banners: armed-for-next-hand (persistent) + live hand */}
+      <Show when={t().banner === "bomb" || t().banner === "bomb_armed"}>
+        <div class="pointer-events-none absolute inset-x-0 top-1 z-50 flex justify-center">
+          <Show
+            when={t().banner === "bomb"}
             fallback={
               <div class="animate-in-pop flex items-center gap-2.5 rounded-xl border border-marigold/70 bg-surface/95 px-4 py-2 shadow-lg">
                 <Show when={typeof t().bombPotArmed === "object"}>
@@ -373,7 +442,7 @@ export function TablePage() {
                 class="relative"
                 style={{
                   width: `${DESIGN_W * scale()}px`,
-                  height: `${(DESIGN_H + SEAT_OVERHANG) * scale()}px`,
+                  height: `${DESIGN_H * scale() + BAR_RESERVE}px`,
                 }}
               >
                 <div
@@ -402,63 +471,81 @@ export function TablePage() {
                     </div>
                   </div>
 
-                  {/* seats */}
-                  <For each={t().seats}>
+                  {/* seats — Index (positional): seats frames replace the array
+                      on every update; For would remount + replay the deal
+                      animation, making every hand "jump" */}
+                  <Index each={t().seats}>
                     {(seat) => {
-                      const [fx, fy] = positions()[seat.seat] ?? [0.5, 0.5];
+                      // reactive: heroSeat arrives with the join snapshot, so
+                      // positions must re-rotate when it lands
+                      const pos = () => posFor(seat().seat);
                       const canJoin = () =>
-                        t().heroSeat < 0 && !seat.player && store.status === "open";
+                        t().heroSeat < 0 && !seat().player && store.status === "open";
                       return (
                         <Seat
-                          seat={seat}
+                          seat={seat()}
                           table={t()}
-                          msLeft={msLeftFor(seat.seat)}
-                          frac={fracFor(seat.seat)}
-                          isHero={seat.seat === t().heroSeat}
-                          dealt={t().dealt[seat.seat] ?? 0}
-                          dealDx={(0.5 - fx) * DESIGN_W}
-                          dealDy={(0.5 - fy) * DESIGN_H}
-                          landing={t().landingSeat === seat.seat}
-                          peeking={seat.seat === t().heroSeat ? peeking() : undefined}
-                          onPeekChange={seat.seat === t().heroSeat ? setPeeking : undefined}
-                          onJoin={canJoin() ? () => openJoinAt(seat.seat) : undefined}
-                          style={`left:${fx * 100}%; top:${fy * 100}%`}
+                          onTopUp={() => store.topUp()}
+                          msLeft={msLeftFor(seat().seat)}
+                          frac={fracFor(seat().seat)}
+                          isHero={seat().seat === t().heroSeat}
+                          dealt={t().dealt[seat().seat] ?? 0}
+                          dealDx={(0.5 - pos()[0]) * DESIGN_W}
+                          dealDy={(0.5 - pos()[1]) * DESIGN_H}
+                          landing={t().landingSeat === seat().seat}
+                          peeking={seat().seat === t().heroSeat ? heroPeeking() : undefined}
+                          onPeekChange={seat().seat === t().heroSeat ? setPeeked : undefined}
+                          onJoin={canJoin() ? () => openJoinAt(seat().seat) : undefined}
+                          style={`left:${pos()[0] * 100}%; top:${pos()[1] * 100}%`}
                         />
                       );
                     }}
-                  </For>
+                  </Index>
 
                   {/* dealer button: glides seat-to-seat around the rail */}
                   <Show when={t().buttonSeat >= 0}>
-                    <DealerButton seat={t().buttonSeat} positions={positions()} />
+                    <DealerButton seat={t().buttonSeat} positions={seatPositions()} />
                   </Show>
 
                   {/* felt chips: player stacks + street bets on the inner ring */}
-                  <For each={t().seats}>
+                  <Index each={t().seats}>
                     {(seat) => {
-                      if (!seat.player) return null;
-                      const p = positions()[seat.seat] ?? [0.5, 0.5];
-                      const stackPos: [number, number] = [
-                        0.5 + (p[0] - 0.5) * 0.72,
-                        0.5 + (p[1] - 0.5) * 0.72,
-                      ];
-                      const betPos: [number, number] = [
-                        0.5 + (p[0] - 0.5) * 0.5,
-                        0.5 + (p[1] - 0.5) * 0.5,
+                      // NB: Index creates each slot once — the empty-seat
+                      // guard must live in a <Show>, not an early return,
+                      // or chips never appear once someone sits
+                      const p = () => posFor(seat().seat);
+                      // stack chips: at bet height, slid toward the nearer
+                      // side rail — beside the player's cards, never between
+                      // them and the pot. all positions stay reactive:
+                      // heroSeat arrives with the join snapshot and the ring
+                      // must re-rotate then.
+                      const spread = () => (t().isDoubleBoard ? 0.62 : 0.5);
+                      const stackPos = (): [number, number] => {
+                        // side seats: their card fans fill the whole
+                        // plate->pot lane, so chips go just below the plate
+                        if (Math.abs(p()[0] - 0.5) > 0.3) return [p()[0], p()[1] + 70 / DESIGN_H];
+                        // top/bottom seats: hug the plate — just beside it,
+                        // at card height for the hero — so the chips read as
+                        // that player's, not as loose pot chips
+                        const side = p()[0] < 0.5 ? -1 : 1;
+                        const inward = p()[1] < 0.5 ? 55 : -55;
+                        return [p()[0] + (side * 130) / DESIGN_W, p()[1] + inward / DESIGN_H];
+                      };
+                      const betPos = (): [number, number] => [
+                        0.5 + (p()[0] - 0.5) * spread(),
+                        0.5 + (p()[1] - 0.5) * spread(),
                       ];
                       return (
-                        <>
-                          <FeltChips pos={stackPos} cents={seat.stackCents} />
-                          <BetChips pos={betPos} from={stackPos} bet={seat.betCents} />
-                        </>
+                        <Show when={seat().player}>
+                          <FeltChips pos={stackPos()} cents={seat().stackCents} />
+                          <BetChips pos={betPos()} from={stackPos()} bet={seat().betCents} />
+                        </Show>
                       );
                     }}
-                  </For>
+                  </Index>
 
                   {/* chips flying to winner */}
-                  <For each={winners()}>
-                    {(w) => <ChipFly toSeat={positions()[w.seat] ?? [0.5, 0.5]} />}
-                  </For>
+                  <For each={winners()}>{(w) => <ChipFly toSeat={posFor(w.seat)} />}</For>
                 </div>
               </div>
             </div>
@@ -466,10 +553,11 @@ export function TablePage() {
         >
           <div class="h-full w-full">
             <TableMobile
+              onTopUp={() => store.topUp()}
               table={t()}
               joinable={store.status === "open" && t().heroSeat < 0}
-              peeking={peeking()}
-              onPeekChange={setPeeking}
+              peeking={heroPeeking()}
+              onPeekChange={setPeeked}
               onTakeSeat={(s) => (s != null ? openJoinAt(s) : setSpectating(false))}
               msLeftFor={msLeftFor}
               fracFor={fracFor}
@@ -478,16 +566,27 @@ export function TablePage() {
         </Show>
       </main>
 
-      {/* action bar + feedback (ASPTR-192); safe-area padding for notched phones */}
-      <footer class="relative flex-none px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
-        <ActionBar table={t()} send={(a) => store.send(a)} error={store.lastError} />
+      {/* action bar + feedback (ASPTR-192). Overlaid on the felt's reserved
+          bottom margin instead of taking layout space — a height change here
+          used to shift/rescale the whole table. */}
+      <footer
+        ref={footerEl}
+        class="absolute inset-x-0 bottom-0 z-40 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6"
+      >
+        <ActionBar
+          table={t()}
+          send={(a) => store.send(a)}
+          error={store.lastError}
+          tip={peekTip()}
+        />
         <div class="absolute bottom-1 right-3 sm:right-6">
           <FeedbackDialog />
         </div>
       </footer>
 
-      {/* toasts (7-2 bounty gold, rabbit hunt mascot) */}
-      <div class="pointer-events-none fixed inset-x-0 top-14 z-50 flex flex-col items-center gap-1.5">
+      {/* toasts (7-2 bounty gold, rabbit hunt mascot) — side cards, not
+          center-screen banners */}
+      <div class="pointer-events-none fixed right-3 top-3 z-40 flex w-72 flex-col items-stretch gap-2">
         <For each={store.toasts}>
           {(toast) => (
             <Show
@@ -496,20 +595,24 @@ export function TablePage() {
                 <Show
                   when={toast.kind === "rabbit"}
                   fallback={
-                    <div class="rounded-full border border-accent/40 bg-surface/95 px-4 py-1.5 text-sm font-semibold text-accent shadow-lg">
+                    <div class="animate-toast-in rounded-xl border border-line bg-surface/95 px-3.5 py-2.5 text-sm font-medium text-fg shadow-xl backdrop-blur">
                       {toast.text}
                     </div>
                   }
                 >
-                  <div class="flex items-center gap-2 rounded-full border border-line bg-surface/95 px-4 py-1.5 text-sm font-semibold text-fg shadow-lg">
-                    <RabbitMark class="size-5" />
+                  <div class="animate-toast-in flex items-center gap-2.5 rounded-xl border border-line bg-surface/95 px-3.5 py-2.5 text-sm font-medium text-fg shadow-xl backdrop-blur">
+                    <RabbitMark class="size-6 shrink-0" />
                     {toast.text}
                   </div>
                 </Show>
               }
             >
-              <div class="animate-toast-gold flex items-center gap-2 rounded-xl border-2 border-marigold bg-marigold/15 px-5 py-2.5 text-base font-bold text-marigold shadow-[0_0_28px_rgba(255,177,16,0.4)]">
-                {toast.text}
+              <div class="animate-toast-in relative overflow-hidden rounded-xl border border-marigold/50 bg-surface/95 px-3.5 py-2.5 text-sm font-semibold text-fg shadow-xl backdrop-blur">
+                <div class="absolute inset-y-0 left-0 w-1 bg-marigold" />
+                <div class="flex items-center gap-2">
+                  <span class="text-marigold">★</span>
+                  {toast.text}
+                </div>
               </div>
             </Show>
           )}
@@ -524,6 +627,10 @@ export function TablePage() {
         blinds={blinds(t().sbCents, t().bbCents)}
         bombPotLive={t().bombPot}
         onArmBombPot={() => store.armBombPot()}
+        texasDropLive={t().texasDrop}
+        onArmTexasDrop={() => store.armTexasDrop()}
+        cardsOpen={cardsOpen()}
+        onSetCardsOpen={setCardPref}
         onClose={() => setDrawerOpen(false)}
       />
 

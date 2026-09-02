@@ -24,6 +24,8 @@ export function ActionBar(props: {
   table: TableState;
   send: (a: PlayerAction) => void;
   error: string | null;
+  /** one-time hint shown under the idle bar (e.g. hold-to-peek) */
+  tip?: string | null;
 }) {
   const t = () => props.table;
   const legal = () => t().legal;
@@ -75,13 +77,15 @@ export function ActionBar(props: {
 
   const applyPreset = (to: number) => {
     setRaising(true);
+    setTyping(false);
+    setTyped("");
     setRaiseTo(Math.round(to));
   };
 
   const commitRaise = () => {
     const la = legal();
     if (!la) return;
-    const to = typing() ? parseBetToCents(typed()) : raiseTo();
+    const to = typing() && typed().trim() !== "" ? parseBetToCents(typed()) : raiseTo();
     if (to == null || to < la.minRaiseToCents || to > la.maxRaiseToCents) return;
     props.send({ kind: "raise", toCents: to });
     setRaising(false);
@@ -101,6 +105,20 @@ export function ActionBar(props: {
   };
 
   const onKey = (e: KeyboardEvent) => {
+    // Texas Drop decision keys work while betting is idle
+    const dc = t().dropPhase;
+    if (!active() && dc && dc.heroEligible && !dc.heroDecided) {
+      if (e.target instanceof HTMLInputElement) return;
+      const k = e.key.toLowerCase();
+      if (k === "s") {
+        e.preventDefault();
+        props.send({ kind: "stay" });
+      } else if (k === "f") {
+        e.preventDefault();
+        props.send({ kind: "drop" });
+      }
+      return;
+    }
     if (!active()) return;
     // ignore when typing in the bet input (except Enter/Esc)
     const inInput = e.target instanceof HTMLInputElement;
@@ -165,42 +183,45 @@ export function ActionBar(props: {
   onCleanup(() => window.removeEventListener("keydown", onKey));
 
   return (
-    <Show when={active()} fallback={<IdleBar table={t()} send={props.send} error={props.error} />}>
-      <div class="mx-auto w-full max-w-3xl rounded-2xl border border-line bg-surface/95 p-3 shadow-2xl shadow-black/50 backdrop-blur">
+    <Show
+      when={active()}
+      fallback={<IdleBar table={t()} send={props.send} error={props.error} tip={props.tip} />}
+    >
+      <div class="mx-auto w-full max-w-3xl rounded-2xl border border-line bg-surface/95 p-2.5 shadow-2xl shadow-black/50 backdrop-blur">
         <Show when={props.error}>
           <div class="mb-2 rounded-lg bg-danger/15 px-3 py-1.5 text-xs font-medium text-danger">
             {props.error}
           </div>
         </Show>
 
-        <div class="flex flex-col gap-3">
-          {/* presets row */}
-          <Show when={legal()!.canRaise}>
-            <div class="flex flex-wrap items-center gap-1.5">
-              <For each={presets()}>
-                {(p) => (
-                  <button
-                    type="button"
-                    class={cn(
-                      "rounded-lg border px-2.5 py-1 text-xs font-semibold tabular-nums transition-colors",
-                      raising() && raiseTo() === p.toCents
-                        ? "border-accent bg-accent/20 text-accent"
-                        : "border-line bg-surface-raised text-fg-muted hover:border-accent/40 hover:text-fg",
-                    )}
-                    onClick={() => applyPreset(p.toCents)}
-                  >
-                    {p.label}
-                  </button>
-                )}
-              </For>
-              <span class="ml-auto text-[11px] text-fg-muted">
-                min {money(legal()!.minRaiseToCents)} · max {money(legal()!.maxRaiseToCents)}
-              </span>
-            </div>
-
-            {/* slider + typed input — shown while raising (saves vertical space in landscape) */}
-            <Show when={raising()}>
-              <div class="grid gap-3 sm:grid-cols-[1fr_150px]">
+        <div class="flex flex-col gap-2.5">
+          {/* bet panel — only while raising; R or the Raise button opens it,
+              Enter/Confirm bets, Esc closes. Nothing here shows by default so
+              the idle bar stays one row tall. */}
+          <Show when={raising() && legal()!.canRaise}>
+            <div class="rounded-xl border border-line/70 bg-surface-raised/60 p-2.5">
+              <div class="flex flex-wrap items-center gap-1.5">
+                <For each={presets()}>
+                  {(p) => (
+                    <button
+                      type="button"
+                      class={cn(
+                        "rounded-lg border px-2.5 py-1 text-xs font-semibold tabular-nums transition-colors",
+                        raiseTo() === p.toCents
+                          ? "border-accent bg-accent/20 text-accent"
+                          : "border-line bg-surface-raised text-fg-muted hover:border-accent/40 hover:text-fg",
+                      )}
+                      onClick={() => applyPreset(p.toCents)}
+                    >
+                      {p.label}
+                    </button>
+                  )}
+                </For>
+                <span class="ml-auto text-[11px] text-fg-muted">
+                  min {money(legal()!.minRaiseToCents)} · max {money(legal()!.maxRaiseToCents)}
+                </span>
+              </div>
+              <div class="mt-2.5 grid gap-3 sm:grid-cols-[1fr_150px]">
                 <div>
                   <Slider
                     value={[raiseTo()]}
@@ -247,10 +268,10 @@ export function ActionBar(props: {
                   </span>
                 </div>
               </div>
-            </Show>
+            </div>
           </Show>
 
-          {/* main buttons */}
+          {/* main buttons — always exactly one row */}
           <div class="flex gap-2.5">
             <Button
               variant="danger"
@@ -273,40 +294,24 @@ export function ActionBar(props: {
               <Button
                 size="lg"
                 class="flex-[1.4] [@media(max-height:520px)]:h-9 [@media(max-height:520px)]:px-3 [@media(max-height:520px)]:text-sm"
-                onClick={commitRaise}
+                onClick={() => {
+                  if (raising()) commitRaise();
+                  else {
+                    setRaising(true);
+                    inputEl()?.focus();
+                  }
+                }}
               >
-                {legal()!.maxRaiseToCents === (typing() ? parseBetToCents(typed()) : raiseTo())
-                  ? "All-in"
-                  : `Raise to ${money(typing() && parseBetToCents(typed()) != null ? parseBetToCents(typed())! : raiseTo())}`}
-                <kbd class="ml-1 rounded bg-black/30 px-1 text-[10px]">R</kbd>
+                {raising()
+                  ? legal()!.maxRaiseToCents ===
+                    (typing() && parseBetToCents(typed()) != null
+                      ? parseBetToCents(typed())!
+                      : raiseTo())
+                    ? "All-in ↵"
+                    : `Confirm ${money(typing() && parseBetToCents(typed()) != null ? parseBetToCents(typed())! : raiseTo())}`
+                  : "Bet / Raise"}
+                <kbd class="ml-1 rounded bg-black/30 px-1 text-[10px]">{raising() ? "↵" : "R"}</kbd>
               </Button>
-            </Show>
-          </div>
-
-          {/* keyboard shortcuts hint (ASPTR-193d) */}
-          <div class="hidden flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[10px] text-fg-muted [@media(max-height:520px)]:hidden sm:flex">
-            <span>
-              <kbd class="rounded border border-line bg-surface-raised px-1 font-sans">F</kbd> fold
-            </span>
-            <span>
-              <kbd class="rounded border border-line bg-surface-raised px-1 font-sans">C</kbd>{" "}
-              check/call
-            </span>
-            <Show when={legal()!.canRaise}>
-              <span>
-                <kbd class="rounded border border-line bg-surface-raised px-1 font-sans">R</kbd>{" "}
-                raise
-              </span>
-            </Show>
-            <span>
-              <kbd class="rounded border border-line bg-surface-raised px-1 font-sans">↵</kbd>{" "}
-              confirm
-            </span>
-            <Show when={legal()!.canRaise}>
-              <span>
-                <kbd class="rounded border border-line bg-surface-raised px-1 font-sans">esc</kbd>{" "}
-                cancel
-              </span>
             </Show>
           </div>
         </div>
@@ -319,45 +324,120 @@ function IdleBar(props: {
   table: TableState;
   send: (a: PlayerAction) => void;
   error: string | null;
+  tip?: string | null;
 }) {
   const t = () => props.table;
+  const drop = () => t().dropPhase;
+  const myChoice = () => !!drop() && drop()!.heroEligible && !drop()!.heroDecided;
+  const waitingLine = () => {
+    const d = drop();
+    if (!d) return null;
+    if (!d.heroEligible) return `Texas Drop — ${d.waiting} still to decide`;
+    if (d.heroDecided)
+      return `Locked in — waiting for ${d.waiting} decision${d.waiting === 1 ? "" : "s"}`;
+    return null;
+  };
   return (
     <div class="mx-auto w-full max-w-3xl">
       <Show
         when={props.error}
         fallback={
           <Show
-            when={t().postHand}
+            when={drop()}
             fallback={
-              <div class="rounded-2xl border border-line/60 bg-surface/50 px-4 py-2.5 text-center text-sm text-fg-muted backdrop-blur">
-                {t().handNo > 0
-                  ? t().street === "showdown" || t().street === "complete"
-                    ? t().message
-                    : "Waiting for opponents…"
-                  : "Connecting…"}
-              </div>
+              <Show
+                when={t().postHand}
+                fallback={
+                  <div class="rounded-2xl border border-line/60 bg-surface/50 px-4 py-2.5 text-center text-sm text-fg-muted backdrop-blur">
+                    {t().handNo > 0
+                      ? t().street === "showdown" ||
+                        t().street === "complete" ||
+                        t().street === "drop"
+                        ? t().message
+                        : "Waiting for opponents…"
+                      : "Connecting…"}
+                  </div>
+                }
+              >
+                {(ph) => (
+                  <div class="flex items-center justify-center gap-2 rounded-2xl border border-accent/40 bg-accent-tint/60 px-4 py-2.5 backdrop-blur">
+                    <span class="text-sm font-medium text-fg">Your decision:</span>
+                    <Show when={ph().reveal}>
+                      <Button size="sm" onClick={() => props.send({ kind: "reveal" })}>
+                        Show hand
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => props.send({ kind: "muck" })}
+                      >
+                        Muck
+                      </Button>
+                    </Show>
+                    <Show when={ph().bounty}>
+                      <Button size="sm" onClick={() => props.send({ kind: "reveal" })}>
+                        Show 7-2 (take bounty)
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => props.send({ kind: "muck" })}
+                      >
+                        Muck
+                      </Button>
+                    </Show>
+                    <Show when={ph().rabbit}>
+                      <Button size="sm" onClick={() => props.send({ kind: "rabbit" })}>
+                        Rabbit hunt
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => props.send({ kind: "muck" })}
+                      >
+                        Skip
+                      </Button>
+                    </Show>
+                  </div>
+                )}
+              </Show>
             }
           >
-            {(ph) => (
-              <div class="flex items-center justify-center gap-2 rounded-2xl border border-accent/40 bg-accent-tint/60 px-4 py-2.5 backdrop-blur">
-                <span class="text-sm font-medium text-fg">Your decision:</span>
-                <Show when={ph().bounty}>
-                  <Button size="sm" onClick={() => props.send({ kind: "reveal" })}>
-                    Show 7-2 (take bounty)
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => props.send({ kind: "muck" })}>
-                    Muck
-                  </Button>
-                </Show>
-                <Show when={ph().rabbit}>
-                  <Button size="sm" onClick={() => props.send({ kind: "rabbit" })}>
-                    Rabbit hunt
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => props.send({ kind: "muck" })}>
-                    Skip
-                  </Button>
-                </Show>
-              </div>
+            {(_d) => (
+              <Show
+                when={myChoice()}
+                fallback={
+                  <div class="rounded-2xl border border-line/60 bg-surface/50 px-4 py-2.5 text-center text-sm text-fg-muted backdrop-blur">
+                    {waitingLine()}
+                  </div>
+                }
+              >
+                <div class="flex flex-col items-center gap-2 rounded-2xl border border-accent/40 bg-accent-tint/60 px-4 py-2.5 backdrop-blur">
+                  <div class="text-center">
+                    <span class="text-sm font-semibold text-fg">Stay or drop?</span>
+                    <span class="ml-2 text-xs text-fg-muted">
+                      pot {money(t().potCents)} · stay and lose = match the pot
+                    </span>
+                  </div>
+                  <div class="flex w-full gap-2.5">
+                    <Button
+                      variant="danger"
+                      size="lg"
+                      class="flex-1"
+                      onClick={() => props.send({ kind: "drop" })}
+                    >
+                      Drop <kbd class="ml-1 rounded bg-black/25 px-1 text-[10px]">F</kbd>
+                    </Button>
+                    <Button
+                      size="lg"
+                      class="flex-[1.4]"
+                      onClick={() => props.send({ kind: "stay" })}
+                    >
+                      Stay up <kbd class="ml-1 rounded bg-black/30 px-1 text-[10px]">S</kbd>
+                    </Button>
+                  </div>
+                </div>
+              </Show>
             )}
           </Show>
         }
@@ -365,6 +445,9 @@ function IdleBar(props: {
         <div class="rounded-2xl border border-danger/40 bg-danger/10 px-4 py-2.5 text-center text-sm font-medium text-danger">
           {props.error}
         </div>
+      </Show>
+      <Show when={props.tip}>
+        <div class="mt-1.5 text-center text-[11px] font-medium text-fg-faint">{props.tip}</div>
       </Show>
     </div>
   );

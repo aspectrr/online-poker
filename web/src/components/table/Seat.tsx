@@ -27,6 +27,8 @@ export function Seat(props: {
   dealDy: number;
   /** first-to-act landing pulse right after the opening deal */
   landing?: boolean;
+  /** hero only: queue a 100bb top-up (button renders under the plate) */
+  onTopUp?: () => void;
   /** hero only: cards hidden until held (peek) */
   peeking?: boolean;
   /** hero only: hold/release to peek at your cards */
@@ -62,9 +64,10 @@ export function Seat(props: {
   return (
     <div
       class={cn(
-        "absolute flex w-36 flex-col items-center gap-1.5 -translate-x-1/2 -translate-y-1/2",
+        "absolute flex w-36 flex-col items-center gap-1.5 -translate-x-1/2 -translate-y-1/2 rounded-2xl",
         props.class,
       )}
+      classList={{ "animate-board-win ring-4 ring-marigold bg-marigold/25": s().isWinner }}
       style={props.style}
     >
       {/* cards sit above the nameplate */}
@@ -77,10 +80,10 @@ export function Seat(props: {
               fallback={
                 // face-down backs, dealt one per beat: fly in from the deck
                 <div class="flex -space-x-6" style={dealVars()}>
-                  <For each={Array.from({ length: landed() }, (_, i) => i)}>
-                    {() => (
-                      <div class="animate-deal-seat">
-                        <Card faceDown size="sm" />
+                  <For each={Array.from({ length: total() })}>
+                    {(_, i) => (
+                      <div class={cn("h-20 w-14", i() < landed() && "animate-deal-seat")}>
+                        <Card faceDown size="sm" class={i() < landed() ? undefined : "opacity-0"} />
                       </div>
                     )}
                   </For>
@@ -93,6 +96,7 @@ export function Seat(props: {
         >
           <HeroHand
             cards={heroShown()!}
+            total={total()}
             revealed={heroRevealed()}
             interactive={canPeek()}
             peeking={props.peeking}
@@ -101,6 +105,41 @@ export function Seat(props: {
             dealDy={props.dealDy}
           />
         </Show>
+      </Show>
+
+      {/* top-up offer: hero only, below 100bb, 3 per session, credits next hand */}
+      <Show
+        when={
+          props.isHero &&
+          props.onTopUp &&
+          !empty() &&
+          s().stackCents < 100 * t().bbCents &&
+          t().rebuysUsed < 3
+        }
+      >
+        <Show
+          when={!t().topUpQueued}
+          fallback={
+            <span class="rounded-full border border-marigold/50 bg-marigold/10 px-2.5 py-0.5 text-[11px] font-semibold text-marigold">
+              Top-up next hand
+            </span>
+          }
+        >
+          <button
+            type="button"
+            class="rounded-full border border-marigold/60 bg-marigold/15 px-2.5 py-0.5 text-[11px] font-bold text-marigold transition-colors hover:bg-marigold/25"
+            onClick={() => props.onTopUp?.()}
+          >
+            + Top up 100bb · {3 - t().rebuysUsed} left
+          </button>
+        </Show>
+      </Show>
+
+      {/* all-in equity: shown while the runout is in progress */}
+      <Show when={!empty() && t().equities && t().equities![s().seat] != null}>
+        <span class="rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-bold tabular-nums text-white shadow">
+          {t().equities![s().seat]}% to win
+        </span>
       </Show>
 
       <Show when={!empty()}>
@@ -112,7 +151,8 @@ export function Seat(props: {
               acting() ? "border-accent/70" : "border-line/80",
               s().folded && "opacity-55 saturate-50",
               s().sittingOut && "opacity-60",
-              s().isWinner && "border-success/80",
+              s().isWinner &&
+                "border-marigold bg-marigold text-black shadow-[0_0_32px_rgba(247,201,72,0.7)]",
             )}
             classList={{
               "ring-2 ring-accent/60 shadow-[0_0_24px_rgba(212,175,55,0.35)] animate-[glow_1.6s_ease-in-out_infinite]":
@@ -120,8 +160,11 @@ export function Seat(props: {
               "animate-landing": !!props.landing,
             }}
           >
-            {/* timer arc: svg circle around the nameplate */}
-            <Show when={acting()}>
+            {/* timer arc: svg circle around the nameplate. Hidden until this
+                seat's cards have landed — an arc over card backs mid-deal
+                just reads as broken; the +5s first-turn grace covers the
+                peek time instead */}
+            <Show when={acting() && landed() >= total()}>
               <svg
                 class="pointer-events-none absolute -inset-1.5"
                 viewBox="0 0 100 54"
@@ -147,7 +190,7 @@ export function Seat(props: {
               <span
                 class={cn(
                   "truncate text-[13px] font-semibold",
-                  props.isHero ? "text-accent" : "text-fg",
+                  s().isWinner ? "text-black" : props.isHero ? "text-accent" : "text-fg",
                 )}
               >
                 {props.isHero ? "you" : s().player}

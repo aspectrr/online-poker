@@ -12,7 +12,16 @@ export type Card = number; // 0..51, rank = c >> 2 (0=2..12=A), suit = c & 3 (s 
 export const cardRank = (c: Card) => c >> 2;
 export const cardSuit = (c: Card) => c & 3;
 
-export type ActionKind = "fold" | "check" | "call" | "raise" | "reveal" | "muck" | "rabbithunt";
+export type ActionKind =
+  | "fold"
+  | "check"
+  | "call"
+  | "raise"
+  | "reveal"
+  | "muck"
+  | "rabbithunt"
+  | "stay"
+  | "drop";
 
 /** Engine LegalActions as sent on the wire (snake_case, cents). */
 export type LegalActionsWire = {
@@ -59,6 +68,7 @@ export type TableSnapshot = {
     seven_deuce_bounty?: number;
     bomb_pot_mode?: string;
     bomb_pot_triggers?: TriggerWire[];
+    texas_drop_ante?: number;
   };
   seats: SeatWire[];
   your_seat: number;
@@ -69,10 +79,17 @@ export type TableSnapshot = {
   your_cards?: Card[];
   to_act_seat?: number;
   deadline_unix_ms?: number;
+  rebuys_used?: number;
+  top_up_queued?: boolean;
   legal_actions?: LegalActionsWire;
   hand_in_progress: boolean;
   bomb_pot_next?: boolean;
   bomb_pot?: boolean;
+  texas_drop_next?: boolean;
+  texas_drop?: boolean;
+  drop_round?: number;
+  drop_waiting?: number;
+  drop_decided?: boolean;
 };
 
 /** Bomb-pot trigger for display (server ranks 2-14, suit 0-3). */
@@ -84,6 +101,7 @@ export type GameEvent = {
   hand_id?: number;
   street?: string;
   bomb_pot?: boolean;
+  texas_drop?: boolean;
   seat?: number;
   player?: string;
   amount?: number;
@@ -108,21 +126,28 @@ export type GameEvent = {
   stacks?: { seat: number; player: string; stack: number }[];
   reason?: string;
   uncontested?: boolean;
+  round?: number; // texas drop: round no.
+  waiting?: number; // drop_decide: seats yet to choose
+  stay?: boolean; // drop_decided ack
+  decisions?: { seat: number; stay: boolean }[]; // drop_reveal
+  equities?: { seat: number; pct: number }[]; // all_in_runout: win %
 };
 
 export type ChatMsg = { seat: number; player: string; text: string };
 
-export type PostHandPrompt = { seat: number; bounty: boolean; rabbit: boolean };
+export type PostHandPrompt = { seat: number; bounty: boolean; rabbit: boolean; reveal: boolean };
 
 /** Client -> server message. */
 export type ClientMsg =
   | { type: "join"; seat: number; name?: string; stack?: number }
   | { type: "leave" }
-  | { type: "action"; kind: "fold" | "check" | "call" | "bet"; amount?: number }
+  | { type: "action"; kind: "fold" | "check" | "call" | "bet" | "stay" | "drop"; amount?: number }
   | { type: "chat"; text: string }
   | { type: "rabbit"; reveal?: boolean }
   | { type: "bomb_pot" }
-  | { type: "dev_deal"; seat: number; cards: Card[] };
+  | { type: "texas_drop" }
+  | { type: "dev_deal"; seat: number; cards: Card[] }
+  | { type: "top_up" };
 
 /** Server -> client message (tagged union on `type`). */
 export type ServerMsg =
@@ -138,7 +163,7 @@ export type ServerMsg =
 
 import type { Rank as CardRank, Suit as CardSuit } from "../components/cards/Card";
 
-export type Street = "preflop" | "flop" | "turn" | "river" | "showdown" | "complete";
+export type Street = "preflop" | "flop" | "turn" | "river" | "showdown" | "drop" | "complete";
 
 export type WireCard = number; // 0..51 engine encoding
 
@@ -234,6 +259,10 @@ export function actionLabel(kind: string, streetBet: number): string {
       return "Check";
     case "call":
       return "Call";
+    case "stay":
+      return "Stay";
+    case "drop":
+      return "Drop";
     case "raise":
       return streetBet > 0 ? `Raise to ${(streetBet / 100).toFixed(2)}` : "Raise";
     case "sb":
@@ -265,6 +294,8 @@ export type TableState = {
   holeCards: UICard[][]; // per hero only, rows for double-board games
   toAct: number; // seat or -1
   deadlineUnixMs: number | null;
+  rebuysUsed: number;
+  topUpQueued: boolean;
   /** total turn-clock duration the current deadline was set from (arc math) */
   turnTimeoutMs: number;
   legal: LegalActions | null; // non-null iff toAct === heroSeat
@@ -272,14 +303,26 @@ export type TableState = {
   message: string; // transient status line ("River: 4♦" …)
   bombPot: boolean;
   isDoubleBoard: boolean;
+  /** Texas Drop live: current hand is a drop game */
+  texasDrop: boolean;
+  /** Texas Drop decision phase state (null outside it) */
+  dropPhase: { round: number; waiting: number; heroDecided: boolean; heroEligible: boolean } | null;
+  /** armed for the NEXT hand (texas_drop_armed) */
+  texasDropArmed: boolean;
   /** 7-2 reveal/muck + rabbit prompt for the hero, when offered */
-  postHand: { bounty: boolean; rabbit: boolean } | null;
+  postHand: { bounty: boolean; rabbit: boolean; reveal: boolean } | null;
   /** read-only active config for the settings drawer */
   cfg: TableConfigView;
   /** armed for the NEXT hand (bomb_pot_armed); UICard = trigger card when trigger-driven, true = manual arm */
   bombPotArmed: UICard | true | null;
   /** board rows that had a pot awarded to them (per-board win highlight) */
   boardWins: number[];
+  /** all-in win % per seat while a runout is in progress */
+  equities: Record<number, number> | null;
+  /** per-board winner lines while a double-board hand resolves */
+  boardWinTexts: (string | undefined)[];
+  /** transient felt banner kind ("drop"|"drop_armed"|"bomb"|"bomb_armed"), auto-clears after 5s */
+  banner: string | null;
   /** opening deal sequence: cards landed per seat / cards per player */
   dealt: number[];
   dealTotal: number;
@@ -297,6 +340,7 @@ export type TableConfigView = {
   sevenDeuceBounty: number;
   bombPotMode: string;
   bombPotTriggers: TriggerWire[];
+  texasDropAnte: number;
 };
 
 export type PlayerAction =
@@ -306,7 +350,9 @@ export type PlayerAction =
   | { kind: "raise"; toCents: number }
   | { kind: "reveal" }
   | { kind: "muck" }
-  | { kind: "rabbit" };
+  | { kind: "rabbit" }
+  | { kind: "stay" }
+  | { kind: "drop" };
 
 export type ConnectionStatus = "connecting" | "open" | "closed";
 
@@ -320,6 +366,10 @@ export type TableStore = {
   readonly me: { name: string; isGuest: boolean } | null;
   /** Arm a bomb pot for the next hand (manual mode). */
   armBombPot(): void;
+  /** Arm a Texas Drop game for the next hand. */
+  armTexasDrop(): void;
+  /** Queue a 100bb top-up; credits at the next hand start (max 3/session). */
+  topUp(): void;
   /** Force hero hole cards next hand (dev builds only). Wire card numbers. */
   devDeal(cards: WireCard[]): void;
   /** Current ws connection state. */

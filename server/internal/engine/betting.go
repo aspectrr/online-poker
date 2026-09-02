@@ -45,9 +45,18 @@ func (r *HandRunner) canActCount() int {
 }
 
 // anyPendingActor: someone owes a decision (owes chips or hasn't acted
-// since the last aggression). A lone chip-holder never gets prompted once
-// all bets are matched — the hand runs out instead.
+// since the last aggression). During a Texas Drop decision phase, every
+// in-hand player owes a stay/drop. A lone chip-holder never gets prompted
+// once all bets are matched — the hand runs out instead.
 func (r *HandRunner) anyPendingActor() bool {
+	if r.street == Drop {
+		for i, p := range r.players {
+			if _, ok := r.dropDecided[i]; p.inHand() && !ok {
+				return true
+			}
+		}
+		return false
+	}
 	lone := r.canActCount() < 2
 	for i, p := range r.players {
 		if !p.inHand() || p.allIn {
@@ -74,6 +83,10 @@ func (r *HandRunner) autoAdvance() []Event {
 		switch {
 		case r.street == Preflop && r.bombPot:
 			evs = append(evs, r.dealBombFlop()...)
+		case r.street == Preflop && r.texasDrop:
+			evs = append(evs, r.dealDropBoard()...)
+		case r.street == Drop:
+			evs = append(evs, r.resolveDropRound()...)
 		case r.street < River:
 			evs = append(evs, r.beginRunoutIfNeeded())
 			evs = append(evs, r.dealNextStreet()...)
@@ -88,6 +101,9 @@ func (r *HandRunner) autoAdvance() []Event {
 
 // applyAction validates and applies one player action.
 func (r *HandRunner) applyAction(a *Action) ([]Event, error) {
+	if a.Kind == Stay || a.Kind == DropOut {
+		return r.applyDropDecision(a)
+	}
 	if a.Kind == Reveal || a.Kind == Muck || a.Kind == RabbitHunt {
 		return r.applyPostHand(a)
 	}
@@ -218,11 +234,48 @@ func (r *HandRunner) legalActions() LegalActions {
 
 // LegalActionsFor exposes current options to the transport layer.
 func (r *HandRunner) LegalActionsFor() *LegalActions {
-	if r.done || r.toActIdx < 0 || r.pendingRevealIdx >= 0 {
+	if r.done || r.toActIdx < 0 || r.pendingRevealIdx >= 0 || r.street == Drop {
 		return nil
 	}
 	la := r.legalActions()
 	return &la
+}
+
+// DropDecidePending: a stay/drop round is open — round no., seats yet to
+// decide. Transport arms its own decision timeout (stay/drop isn't a
+// betting turn, so LegalActionsFor is nil here).
+func (r *HandRunner) DropDecidePending() (round int, waiting int, ok bool) {
+	if r.done || r.street != Drop {
+		return 0, 0, false
+	}
+	for i, p := range r.players {
+		if _, decided := r.dropDecided[i]; p.inHand() && !decided {
+			waiting++
+		}
+	}
+	return r.dropRound, waiting, true
+}
+
+// UndecidedSeats: seats that still owe a stay/drop this round (timeout
+// auto-drops them).
+func (r *HandRunner) UndecidedSeats() []int {
+	var out []int
+	for i, p := range r.players {
+		if _, decided := r.dropDecided[i]; p.inHand() && !decided {
+			out = append(out, p.seat)
+		}
+	}
+	return out
+}
+
+// SeatDecided: this seat has locked a stay/drop choice for the round.
+func (r *HandRunner) SeatDecided(seat int) bool {
+	i := r.idxOfSeat(seat)
+	if i < 0 {
+		return false
+	}
+	_, ok := r.dropDecided[i]
+	return ok
 }
 
 // beginRunoutIfNeeded: when betting is over with >= 2 players contested,
@@ -249,6 +302,7 @@ func (r *HandRunner) beginRunoutIfNeeded() Event {
 		Street:     r.street.String(),
 		Pot:        r.potTotal(),
 		BoardIndex: len(r.board) - 1, // 1 when running it twice
+		Equities:   r.computeEquities(),
 	}
 }
 
