@@ -464,9 +464,16 @@ func (t *Table) armTimeout(la *engine.LegalActions) {
 	if t.cfg.ActionTimeoutSecs <= 0 {
 		return
 	}
-	t.deadline = time.Now().Add(time.Duration(t.cfg.ActionTimeoutSecs) * time.Second).UnixMilli()
+	// first betting turn of a hand: add a grace so the clock doesn't eat
+	// into the opening deal animation
+	secs := t.cfg.ActionTimeoutSecs
+	if t.graceHandNo != t.handNo {
+		t.graceHandNo = t.handNo
+		secs += 5
+	}
+	t.deadline = time.Now().Add(time.Duration(secs) * time.Second).UnixMilli()
 	seatNo := la.Seat
-	t.timer = time.AfterFunc(time.Duration(t.cfg.ActionTimeoutSecs)*time.Second, func() {
+	t.timer = time.AfterFunc(time.Duration(secs)*time.Second, func() {
 		t.Send(nil, protocol.ClientMsg{Type: "__timeout", Seat: seatNo})
 	})
 }

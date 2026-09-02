@@ -79,6 +79,8 @@ type Table struct {
 	// dropTimer: stay/drop decision timeout for the round in dropTimerRound
 	dropTimer      *time.Timer
 	dropTimerRound int
+	// graceHandNo: hand that already used its first-turn +5s deal grace
+	graceHandNo int64
 	// devDeals: forced hole cards per seat, consumed by the next startHand
 	// (dev builds only)
 	devDeals map[int][]engine.Card

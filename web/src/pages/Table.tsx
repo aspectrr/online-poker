@@ -32,7 +32,7 @@ const API_URL = import.meta.env.VITE_API_URL as string | undefined;
 const DESIGN_W = 1024;
 const DESIGN_H = 640;
 /** bottom-center seat (at 95%) overhangs the box by ~half its height — budget it so the action bar never covers the hero */
-const SEAT_OVERHANG = 84;
+const SEAT_OVERHANG = 160;
 
 /** Ellipse seat positions (fractions of the felt box) for up to 9 seats. */
 const SEAT_POS: Record<number, [number, number][]> = {
@@ -184,11 +184,6 @@ export function TablePage() {
     measure();
     window.addEventListener("resize", measure);
     onCleanup(() => window.removeEventListener("resize", measure));
-    // the action bar changes height between idle/betting — re-fit the felt
-    // so it never ends up behind the bar
-    const ro = new ResizeObserver(measure);
-    if (footerEl) ro.observe(footerEl);
-    onCleanup(() => ro.disconnect());
     // the felt box only exists outside the compact layout — re-measure when
     // crossing the breakpoint (rotation) once it mounts
     createEffect(on(compact, () => queueMicrotask(measure)));
@@ -514,30 +509,29 @@ export function TablePage() {
                   {/* felt chips: player stacks + street bets on the inner ring */}
                   <Index each={t().seats}>
                     {(seat) => {
-                      if (!seat().player) return null;
+                      // NB: Index creates each slot once — the empty-seat
+                      // guard must live in a <Show>, not an early return,
+                      // or chips never appear once someone sits
                       const p = () => posFor(seat().seat);
-                      // stack chips sit between seat and pot; on bottom-row
-                      // seats that zone holds the hero's cards — lift them clear.
-                      // double boards are tall — hug bets and stacks closer
-                      // to the players so they clear the board rows.
+                      // stack chips: toward the pot but slid LEFT of the
+                      // player's card column, so they never cover cards, bets
+                      // or the board. double boards hug bets closer to players.
                       // all positions stay reactive: heroSeat arrives with the
                       // join snapshot and the ring must re-rotate then.
                       const spread = () => (t().isDoubleBoard ? 0.62 : 0.5);
-                      const stackY = () =>
-                        p()[1] > 0.7 ? p()[1] - 0.24 : 0.5 + (p()[1] - 0.5) * 0.74;
                       const stackPos = (): [number, number] => [
-                        0.5 + (p()[0] - 0.5) * (t().isDoubleBoard ? 0.78 : 0.72),
-                        stackY(),
+                        0.5 + (p()[0] - 0.5) * 0.55 - 56 / DESIGN_W,
+                        0.5 + (p()[1] - 0.5) * 0.55,
                       ];
                       const betPos = (): [number, number] => [
                         0.5 + (p()[0] - 0.5) * spread(),
                         0.5 + (p()[1] - 0.5) * spread(),
                       ];
                       return (
-                        <>
+                        <Show when={seat().player}>
                           <FeltChips pos={stackPos()} cents={seat().stackCents} />
                           <BetChips pos={betPos()} from={stackPos()} bet={seat().betCents} />
-                        </>
+                        </Show>
                       );
                     }}
                   </Index>
@@ -563,10 +557,12 @@ export function TablePage() {
         </Show>
       </main>
 
-      {/* action bar + feedback (ASPTR-192); safe-area padding for notched phones */}
+      {/* action bar + feedback (ASPTR-192). Overlaid on the felt's reserved
+          bottom margin instead of taking layout space — a height change here
+          used to shift/rescale the whole table. */}
       <footer
         ref={footerEl}
-        class="relative flex-none px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6"
+        class="absolute inset-x-0 bottom-0 z-40 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6"
       >
         <ActionBar
           table={t()}

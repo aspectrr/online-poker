@@ -145,7 +145,7 @@ function OpponentChip(props: {
         acting() ? "border-accent/70" : "border-line/80",
         s().folded && "opacity-55 saturate-50",
         s().sittingOut && "opacity-60",
-        s().isWinner && "border-success/80",
+        s().isWinner && "border-marigold/90",
       )}
     >
       {/* cards: revealed faces at showdown, else card backs while in hand */}

@@ -91,7 +91,7 @@ func main() {
 			Config: store.TableConfig{
 				BlindsSBBB:       []int64{10, 20},
 				StartingStackBB:  200,
-				ActionTimeoutS:   15,
+				ActionTimeoutS:   90,
 				InterHandDelayS:  5,
 				RIT:              "always",
 				RabbitHunt:       true,

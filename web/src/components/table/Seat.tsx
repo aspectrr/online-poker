@@ -65,7 +65,7 @@ export function Seat(props: {
         "absolute flex w-36 flex-col items-center gap-1.5 -translate-x-1/2 -translate-y-1/2 rounded-2xl",
         props.class,
       )}
-      classList={{ "animate-board-win ring-2 ring-success/80 bg-success/10": s().isWinner }}
+      classList={{ "animate-board-win ring-2 ring-marigold/90 bg-marigold/10": s().isWinner }}
       style={props.style}
     >
       {/* cards sit above the nameplate */}
