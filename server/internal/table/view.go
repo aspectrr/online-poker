@@ -92,6 +92,13 @@ func (t *Table) seatByNo(n int) *seat {
 
 // broadcastSeats: public seat occupancy/stack update to everyone.
 func (t *Table) broadcastSeats() {
+	var occ int64
+	for _, s := range t.seats {
+		if s.userID != "" {
+			occ++
+		}
+	}
+	t.occupied.Store(occ)
 	seats := t.seatsWire()
 	for c := range t.clients {
 		c.TrySend(protocol.ServerMsg{Type: "seats", Seats: seats})
@@ -173,6 +180,7 @@ func (t *Table) snapshotFor(viewer int) *protocol.TableState {
 		if viewer >= 0 {
 			if s := t.seatByNo(viewer); s != nil {
 				st.YourCards = s.lastHoles // private: viewer's own seat only
+				st.YourHand = t.runner.MadeHandName(viewer)
 				st.RebuysUsed = s.rebuys
 				st.TopUpQueued = s.pendingTopUp > 0
 			}

@@ -1,10 +1,10 @@
-import { For, Show, createResource, createSignal, onMount } from "solid-js";
+import { For, Show, createResource, createSignal, onCleanup, onMount } from "solid-js";
 import { A, useNavigate } from "@solidjs/router";
 import { Logo } from "../components/Logo";
 import { Button } from "../components/ui/Button";
 import { CreateTableDialog } from "../components/CreateTableDialog";
 import { FeedbackDialog } from "../components/FeedbackDialog";
-import { MOCK_MODE, listTables } from "../lib/api";
+import { MOCK_MODE, deleteTable, listTables } from "../lib/api";
 import { supabase } from "../lib/supabase";
 import { blinds, money } from "../lib/money";
 import type { TableSummary } from "../lib/types";
@@ -29,16 +29,37 @@ export function LobbyPage() {
   // auth state for the nav (ASPTR-193e): sign out when a supabase session exists
   const [authed, setAuthed] = createSignal(false);
   const [email, setEmail] = createSignal("");
+  const [uid, setUid] = createSignal("");
   onMount(async () => {
     const sb = supabase();
     if (!sb) return;
     const { data } = await sb.auth.getSession();
     setAuthed(!!data.session);
     setEmail(data.session?.user.email ?? "");
+    setUid(data.session?.user.id ?? "");
   });
   const signOut = async () => {
     await supabase()?.auth.signOut();
     setAuthed(false);
+  };
+
+  // live seat counts: poll while the lobby is visible
+  let poll: number | undefined;
+  onMount(() => {
+    poll = window.setInterval(() => {
+      if (!tables.loading) void refetch();
+    }, 5000);
+  });
+  onCleanup(() => window.clearInterval(poll));
+
+  const onDelete = async (t: TableSummary) => {
+    if (!window.confirm(`Delete table “${t.name}”? Everyone is removed immediately.`)) return;
+    try {
+      await deleteTable(t.id);
+      void refetch();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const onJoin = async (t: TableSummary) => {
@@ -135,7 +156,14 @@ export function LobbyPage() {
         >
           <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <For each={tables.latest?.ok ? tables.latest.rows : []}>
-              {(t) => <TableCard table={t} onJoin={() => onJoin(t)} />}
+              {(t) => (
+                <TableCard
+                  table={t}
+                  canDelete={authed() && !!t.createdBy && t.createdBy === uid()}
+                  onDelete={() => void onDelete(t)}
+                  onJoin={() => onJoin(t)}
+                />
+              )}
             </For>
           </div>
         </Show>
@@ -159,7 +187,12 @@ function TableSkeleton() {
   );
 }
 
-function TableCard(props: { table: TableSummary; onJoin: () => void }) {
+function TableCard(props: {
+  table: TableSummary;
+  canDelete: boolean;
+  onDelete: () => void;
+  onJoin: () => void;
+}) {
   const t = () => props.table;
   const full = () => t().seatsFilled >= t().maxSeats;
   // invite link: copies this table's URL to the clipboard
@@ -222,6 +255,30 @@ function TableCard(props: { table: TableSummary; onJoin: () => void }) {
           {t().seatsFilled}/{t().maxSeats} seated
         </span>
         <div class="flex items-center gap-2">
+          <Show when={props.canDelete}>
+            <button
+              type="button"
+              title="Delete table"
+              aria-label="Delete table"
+              class="grid size-8 place-items-center rounded-btn border border-line text-fg-muted transition-colors hover:border-danger/40 hover:text-danger"
+              onClick={props.onDelete}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="size-4"
+                aria-hidden="true"
+              >
+                <path d="M3 6h18" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+            </button>
+          </Show>
           <button
             type="button"
             title={copied() ? "Link copied!" : "Copy invite link"}

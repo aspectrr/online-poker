@@ -33,6 +33,7 @@ const (
 	EvDropDecided      = engine.EvDropDecided
 	EvDropReveal       = engine.EvDropReveal
 	EvDropReplenish    = engine.EvDropReplenish
+	EvDropHoles        = engine.EvDropHoles
 )
 
 type (

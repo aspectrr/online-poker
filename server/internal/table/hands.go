@@ -138,6 +138,7 @@ func (t *Table) startHand() {
 		log.Printf("table %s hand %d: TEXAS DROP (ante %d)", t.row.ID, cfg.HandID, cfg.TexasDropAnte)
 	}
 	t.runner = r
+	t.busy.Store(1)
 	t.handNo = cfg.HandID
 	t.pending = nil
 	t.handEvents = nil // events accumulate per hand only
@@ -348,12 +349,16 @@ func firstTriggerMatch(triggers []engine.CardTrigger, cards []engine.Card) (engi
 
 // handEnded: cleanup + schedule next hand after inter-hand delay.
 func (t *Table) handEnded() {
+	t.busy.Store(0)
 	// advance button to next occupied seat
 	t.button = t.nextButton()
 	// bomb-pot triggers match the previous hand's FLOP cards only — a
 	// trigger card peeling off on the turn/river shouldn't arm a bomb pot
 	var lastDealt []engine.Card
 	wasTexasDrop := t.texasDrop
+	// a bomb pot's own board must not arm the next bomb pot — the trigger
+	// cards come from a normal hand only
+	wasBombPot := t.bombPot
 	if t.runner != nil {
 		lastDealt = t.runner.FlopCards()
 	}
@@ -374,14 +379,14 @@ func (t *Table) handEnded() {
 	// a drop game deals whole extra decks (fresh board per round) — those
 	// cards would fire bomb-pot triggers nearly every time; don't feed them
 	// into the next hand's trigger match
-	if !wasTexasDrop {
+	if !wasTexasDrop && !wasBombPot {
 		t.lastDealt = lastDealt
 	}
 	// banner for trigger-armed bomb pots: everyone sees it during the
 	// inter-hand delay; startHand re-matches and consumes lastDealt itself.
 	// Skipped when a drop game is armed — drop wins the next hand and the
 	// bomb-pot banner would just contradict it.
-	if !t.forceBombPot && !t.forceTexasDrop && len(t.lastDealt) > 0 && len(t.cfg.BombPotCardTriggers) > 0 {
+	if !t.forceBombPot && !t.forceTexasDrop && !wasBombPot && len(t.lastDealt) > 0 && len(t.cfg.BombPotCardTriggers) > 0 {
 		if c, ok := firstTriggerMatch(t.cfg.BombPotCardTriggers, t.lastDealt); ok {
 			t.broadcastEvent(protocol.Event{Type: protocol.EvBombPotArmed, Cards: []engine.Card{c}})
 		}
@@ -480,21 +485,39 @@ func (t *Table) publishEvents(evs []protocol.Event) {
 			}
 			continue
 		}
-		if ev.Type == protocol.EvHandStarted && t.runner != nil {
-			// hand_started goes to everyone; private holes only to their seat
+		if ev.Type == protocol.EvHandStarted && t.runner != nil || ev.Type == protocol.EvDropHoles {
+			// fresh holes go to each seat privately (hand start / drop round);
+			// clients see the same holes_dealt event either way. The public
+			// copy is redacted — nobody sees anyone's hole cards here.
+			public := ev
+			public.HoleCards = nil
 			for c := range t.clients {
-				out := ev
+				out := public
 				c.TrySend(protocol.ServerMsg{Type: "event", Event: &out})
 			}
 			for _, s := range t.seats {
-				if !s.inHand || s.conn == nil {
+				var cards []engine.Card
+				if ev.Type == protocol.EvDropHoles {
+					for _, h := range ev.HoleCards {
+						if h.Seat == s.seat {
+							cards = h.Cards
+						}
+					}
+					if s.userID != "" {
+						s.lastHoles = cards
+					}
+				} else if t.runner != nil {
+					cards = t.runner.HolesFor(s.seat)
+				}
+				if !s.inHand || s.conn == nil || len(cards) == 0 {
 					continue
 				}
 				private := ev
 				private.Type = protocol.EvHolesDealt
 				private.Seat = s.seat
 				private.Player = s.name
-				private.Cards = t.runner.HolesFor(s.seat)
+				private.Cards = cards
+				private.HoleCards = nil // never ship other seats' cards
 				s.conn.TrySend(protocol.ServerMsg{Type: "event", Event: &private})
 			}
 			continue

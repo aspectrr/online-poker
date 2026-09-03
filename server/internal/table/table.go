@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/aspectrr/online-poker/server/internal/engine"
@@ -111,6 +112,12 @@ type Table struct {
 	ctx     context.Context
 	stop    context.CancelFunc
 	once    sync.Once
+
+	// cross-goroutine reads for the REST lobby/reaper; the actor goroutine
+	// writes them, atomics keep the reads race-free
+	occupied   atomic.Int64 // seats taken
+	busy       atomic.Int64 // 1 while a hand is in progress
+	emptySince atomic.Int64 // unix sec since the last client detached; 0 = has clients
 }
 
 // engineConfig maps a store row to the engine config.
@@ -198,6 +205,8 @@ func New(row store.GameTable, persist Persister, dev bool) *Table {
 	for i := range t.seats {
 		t.seats[i] = &seat{seat: i}
 	}
+	// born empty: the reaper may close a table nobody ever joined
+	t.emptySince.Store(time.Now().Unix())
 	go t.run()
 	return t
 }
@@ -238,6 +247,21 @@ func (t *Table) topUp(c *ws.Client) {
 	s.pendingTopUp = rebuyBB * t.cfg.BigBlind
 	t.broadcastSeats()
 	t.broadcastState()
+}
+
+// SeatedCount: occupied seats for the REST lobby (atomic read).
+func (t *Table) SeatedCount() int { return int(t.occupied.Load()) }
+
+// Busy: a hand is in progress (reaper guard).
+func (t *Table) Busy() bool { return t.busy.Load() == 1 }
+
+// EmptyFor: how long no client has been attached (0 when clients exist).
+func (t *Table) EmptyFor() time.Duration {
+	since := t.emptySince.Load()
+	if since == 0 {
+		return 0
+	}
+	return time.Since(time.Unix(since, 0))
 }
 
 // broadcastState: fresh per-viewer snapshot to every attached client.
@@ -317,6 +341,7 @@ func (t *Table) handle(in inbox) {
 	switch in.msg.Type {
 	case "__attach":
 		t.clients[in.client] = struct{}{}
+		t.emptySince.Store(0)
 		// Snapshot immediately: spectators render the table; a reconnecting
 		// player re-adopts their seat without waiting for a join message.
 		viewer := -1
@@ -332,6 +357,9 @@ func (t *Table) handle(in inbox) {
 		return
 	case "__detach":
 		delete(t.clients, in.client)
+		if len(t.clients) == 0 {
+			t.emptySince.Store(time.Now().Unix())
+		}
 		return
 	case "__start_hand":
 		t.startHand()

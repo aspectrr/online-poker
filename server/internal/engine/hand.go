@@ -390,3 +390,25 @@ func (r *HandRunner) Board() [][]Card {
 
 // Pot: total chips in play this hand.
 func (r *HandRunner) Pot() int64 { return r.potTotal() }
+
+// MadeHandName: the viewer's current best hand category on the main board
+// ("two_pair" etc), "" before the flop or when the seat has no cards.
+// Drives the live label under the hero's cards; showdown naming uses the
+// per-board eval in finishShowdown.
+func (r *HandRunner) MadeHandName(seat int) string {
+	if r == nil || len(r.board) == 0 || len(r.board[0]) < 3 {
+		return ""
+	}
+	board := r.board[0]
+	p := r.playerBySeat(seat)
+	if p == nil || len(p.hole) == 0 {
+		return ""
+	}
+	if r.cfg.Game == PLO4 || r.bombPot {
+		var h [4]Card
+		copy(h[:], p.hole)
+		return HandCategoryName(EvaluatePLOPartial(h, board))
+	}
+	cards := append(append([]Card(nil), p.hole...), board...)
+	return HandCategoryName(EvaluatePartial(cards))
+}

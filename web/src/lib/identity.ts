@@ -25,11 +25,22 @@ async function guestToken(): Promise<string | null> {
   if (!API_URL) return null;
   const saved = localStorage.getItem(GUEST_TOKEN_KEY);
   if (saved) return saved;
-  const res = await fetch(`${API_URL}/api/auth/guest`, { method: "POST" });
-  if (!res.ok) return null;
-  const { token } = (await res.json()) as { token: string };
-  localStorage.setItem(GUEST_TOKEN_KEY, token);
-  return token;
+  // one retry: the server may still be waking up (fly cold start) — a failed
+  // mint here used to strand the whole join flow on "connecting"
+  for (let i = 0; i < 2; i++) {
+    try {
+      const res = await fetch(`${API_URL}/api/auth/guest`, { method: "POST" });
+      if (res.ok) {
+        const { token } = (await res.json()) as { token: string };
+        localStorage.setItem(GUEST_TOKEN_KEY, token);
+        return token;
+      }
+    } catch {
+      // network error — fall through to retry
+    }
+    if (i === 0) await new Promise((r) => setTimeout(r, 1500));
+  }
+  return null;
 }
 
 export async function authIdentity(): Promise<Identity | null> {

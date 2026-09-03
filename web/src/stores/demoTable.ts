@@ -168,6 +168,7 @@ export function createDemoTable(tableId: string): TableStore {
     boardWins: [],
     dealt: Array.from({ length: MAX }, () => 2),
     dealTotal: 2,
+    heroHand: "",
     dealDone: true,
   });
   const [err, setErr] = createStore({ lastError: null as string | null });

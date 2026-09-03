@@ -22,8 +22,14 @@ export function AuthPage() {
       options: { shouldCreateUser: true, emailRedirectTo: window.location.origin },
     });
     setSending(false);
-    if (err) setError(err.message);
-    else setSent(true);
+    if (err) {
+      // Supabase free-tier OTP quota — the raw message confuses players
+      setError(
+        /rate limit/i.test(err.message)
+          ? "Too many sign-in emails sent — wait a few minutes and try again."
+          : err.message,
+      );
+    } else setSent(true);
   };
 
   return (

@@ -223,27 +223,18 @@ export function TablePage() {
     ),
   );
 
-  // card visibility preference: hold-to-peek (default) or always open.
+  // card visibility preference: always open (default) or hold-to-peek.
   // Client-local (localStorage) — not part of the table config.
-  const [cardsOpen, setCardsOpen] = createSignal(localStorage.getItem("rr:cards") === "open");
+  const [cardsOpen, setCardsOpen] = createSignal(localStorage.getItem("rr:cards") !== "hold");
   const setCardPref = (open: boolean) => {
     setCardsOpen(open);
     localStorage.setItem("rr:cards", open ? "open" : "hold");
   };
   const heroPeeking = () => cardsOpen() || peeking();
-  // one-time tip until the player has peeked at least once
-  const [everPeeked, setEverPeeked] = createSignal(localStorage.getItem("rr:peeked") === "1");
   const setPeeked = (v: boolean) => {
     setPeeking(v);
-    if (v) {
-      localStorage.setItem("rr:peeked", "1");
-      setEverPeeked(true);
-    }
+    if (v) localStorage.setItem("rr:peeked", "1");
   };
-  const peekTip = () =>
-    !cardsOpen() && !everPeeked() && t().holeCards.length > 0
-      ? "tip: press and hold your cards to peek at them"
-      : null;
 
   // reconnect banner (ASPTR-193): surface ws drops; suppress the initial connecting flash
   const [everOpen, setEverOpen] = createSignal(false);
@@ -494,6 +485,11 @@ export function TablePage() {
                           dealDy={(0.5 - pos()[1]) * DESIGN_H}
                           landing={t().landingSeat === seat().seat}
                           peeking={seat().seat === t().heroSeat ? heroPeeking() : undefined}
+                          peekHint={
+                            seat().seat === t().heroSeat && !cardsOpen() && t().holeCards.length > 0
+                              ? () => !heroPeeking()
+                              : undefined
+                          }
                           onPeekChange={seat().seat === t().heroSeat ? setPeeked : undefined}
                           onJoin={canJoin() ? () => openJoinAt(seat().seat) : undefined}
                           style={`left:${pos()[0] * 100}%; top:${pos()[1] * 100}%`}
@@ -573,12 +569,7 @@ export function TablePage() {
         ref={footerEl}
         class="absolute inset-x-0 bottom-0 z-40 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6"
       >
-        <ActionBar
-          table={t()}
-          send={(a) => store.send(a)}
-          error={store.lastError}
-          tip={peekTip()}
-        />
+        <ActionBar table={t()} send={(a) => store.send(a)} error={store.lastError} />
         <div class="absolute bottom-1 right-3 sm:right-6">
           <FeedbackDialog />
         </div>

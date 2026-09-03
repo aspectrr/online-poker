@@ -34,6 +34,8 @@ export type TableSummary = {
   maxSeats: number;
   avgPotCents?: number;
   playersToActFlopPct?: number;
+  /** creator's auth uid (server) — enables the delete affordance */
+  createdBy?: string | null;
 };
 
 export const DEFAULT_TABLE_CONFIG: TableConfig = {

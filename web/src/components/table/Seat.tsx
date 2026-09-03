@@ -1,6 +1,7 @@
 import { For, Show, createMemo } from "solid-js";
 import { money } from "../../lib/money";
 import type { SeatState, TableState } from "../../lib/tableTypes";
+import { HAND_LABELS } from "../../lib/tableTypes";
 import { CardRow } from "../cards/CardRow";
 import { Card } from "../cards/Card";
 import { HeroHand } from "../cards/HeroHand";
@@ -33,6 +34,8 @@ export function Seat(props: {
   peeking?: boolean;
   /** hero only: hold/release to peek at your cards */
   onPeekChange?: (peeking: boolean) => void;
+  /** hero only: show the "hold to peek" hint under the face-down backs */
+  peekHint?: () => boolean;
   /** present when a spectator may take this empty seat */
   onJoin?: () => void;
   class?: string;
@@ -79,14 +82,28 @@ export function Seat(props: {
               when={revealed()}
               fallback={
                 // face-down backs, dealt one per beat: fly in from the deck
-                <div class="flex -space-x-6" style={dealVars()}>
-                  <For each={Array.from({ length: total() })}>
-                    {(_, i) => (
-                      <div class={cn("h-20 w-14", i() < landed() && "animate-deal-seat")}>
-                        <Card faceDown size="sm" class={i() < landed() ? undefined : "opacity-0"} />
-                      </div>
-                    )}
-                  </For>
+                <div class="flex flex-col items-center gap-1" style={dealVars()}>
+                  <div class="flex -space-x-6">
+                    <For each={Array.from({ length: total() })}>
+                      {(_, i) => (
+                        <div class={cn("h-20 w-14", i() < landed() && "animate-deal-seat")}>
+                          <Card
+                            faceDown
+                            size="sm"
+                            class={i() < landed() ? undefined : "opacity-0"}
+                          />
+                        </div>
+                      )}
+                    </For>
+                  </div>
+                  <Show when={props.isHero && props.peekHint?.()}>
+                    <span
+                      class="peek-hint rounded-pill bg-surface/90 px-2 py-0.5 text-[10px] font-medium text-fg-muted"
+                      role="note"
+                    >
+                      hold to peek
+                    </span>
+                  </Show>
                 </div>
               }
             >
@@ -107,13 +124,24 @@ export function Seat(props: {
         </Show>
       </Show>
 
-      {/* top-up offer: hero only, below 100bb, 3 per session, credits next hand */}
+      {/* hero live hand label — reserved slot so the plate never reflows */}
+      <Show when={props.isHero}>
+        <span
+          class="rounded-pill bg-surface/90 px-2 py-0.5 text-[10px] font-semibold text-accent"
+          classList={{ invisible: !t().heroHand }}
+          role="note"
+        >
+          {HAND_LABELS[t().heroHand] ?? t().heroHand}
+        </span>
+      </Show>
+
+      {/* top-up offer: hero only, below 10bb, 3 per session, credits next hand */}
       <Show
         when={
           props.isHero &&
           props.onTopUp &&
           !empty() &&
-          s().stackCents < 100 * t().bbCents &&
+          s().stackCents < 10 * t().bbCents &&
           t().rebuysUsed < 3
         }
       >

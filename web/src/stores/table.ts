@@ -65,6 +65,7 @@ function initialState(tableId: string): TableState {
     potCents: 0,
     board: { street: "preflop", boards: [[]] },
     holeCards: [],
+    heroHand: "",
     toAct: -1,
     deadlineUnixMs: null,
     rebuysUsed: 0,
@@ -290,6 +291,7 @@ function createTableStore(tableId: string): TableStore {
         board: { ...s.board, boards: (snap.board?.length ? snap.board : [[]]).map(uiCards) },
         isDoubleBoard: (snap.board?.length ?? 1) > 1,
         holeCards: snap.your_cards?.length ? [uiCards(snap.your_cards)] : inHand ? s.holeCards : [],
+        heroHand: inHand ? (snap.your_hand ?? "") : "",
         toAct: snap.to_act_seat ?? -1,
         deadlineUnixMs: snap.deadline_unix_ms || null,
         rebuysUsed: snap.rebuys_used ?? 0,
@@ -347,6 +349,7 @@ function createTableStore(tableId: string): TableStore {
           potCents: 0,
           board: { street: "preflop", boards: [[]] },
           holeCards: [],
+          heroHand: "",
           toAct: -1,
           deadlineUnixMs: null,
           rebuysUsed: 0,
@@ -663,6 +666,7 @@ function createTableStore(tableId: string): TableStore {
     }
   };
 
+  let retryTimer: number | null = null;
   const connect = async () => {
     if (!API_URL) {
       patch({ message: "no API configured" });
@@ -671,14 +675,67 @@ function createTableStore(tableId: string): TableStore {
     }
     const id = await authIdentity().catch(() => null);
     if (!id) {
-      patch({ message: "couldn't reach the server — refresh to retry" });
+      // server unreachable (e.g. cold start): retry instead of stranding the
+      // player on "connecting" until a manual refresh
+      patch({ message: "couldn't reach the server — retrying…" });
       setStatus("closed");
+      if (retryTimer === null) {
+        retryTimer = window.setTimeout(() => {
+          retryTimer = null;
+          void connect();
+        }, 4000);
+      }
       return;
     }
     me = { name: id.name, isGuest: id.isGuest };
-    sock = new TableSocket(tableWsUrl(API_URL, tableId), id.token, reduce, setStatus);
+    // token resolved per attempt so reconnects pick up fresh identities
+    sock = new TableSocket(
+      tableWsUrl(API_URL, tableId, import.meta.env.VITE_API_KEY as string | undefined),
+      async () => (await authIdentity().catch(() => null))?.token,
+      reduce,
+      setStatus,
+    );
     sock.connect();
   };
+
+  // Idle dormancy: an abandoned tab holding a WS open keeps the fly machine
+  // awake forever (open connection = no auto-stop). After 30min without any
+  // user input, close the socket and stop reconnecting; the first pointer /
+  // key / focus / visible event reconnects (seat re-adopts by token).
+  const idleTTL = 30 * 60 * 1000;
+  let dormant = false;
+  let lastActivity = Date.now();
+  const wake = () => {
+    lastActivity = Date.now();
+    if (dormant) {
+      dormant = false;
+      patch({ message: "" });
+      void connect();
+    }
+  };
+  const activityEvents: [string, EventListener][] = [
+    ["pointerdown", wake],
+    ["keydown", wake],
+    ["focus", wake],
+    [
+      "visibilitychange",
+      () => {
+        if (document.visibilityState === "visible") wake();
+      },
+    ],
+  ];
+  for (const [name, fn] of activityEvents) window.addEventListener(name, fn);
+  const idleCheck = window.setInterval(() => {
+    if (!dormant && Date.now() - lastActivity > idleTTL) {
+      dormant = true;
+      patch({ message: "asleep — tap to reconnect" });
+      sock?.close(); // no reconnect: TableSocket.closed stops the loop
+    }
+  }, 60 * 1000);
+  onCleanup(() => {
+    window.clearInterval(idleCheck);
+    for (const [name, fn] of activityEvents) window.removeEventListener(name, fn);
+  });
   const send = (a: PlayerAction) => {
     if (a.kind === "raise") sock?.send({ type: "action", kind: "bet", amount: a.toCents });
     else if (a.kind === "reveal") sock?.send({ type: "rabbit", reveal: true });
@@ -713,6 +770,7 @@ function createTableStore(tableId: string): TableStore {
 
   onCleanup(() => {
     clearDealTimers();
+    if (retryTimer !== null) window.clearTimeout(retryTimer);
     sock?.close();
   });
 

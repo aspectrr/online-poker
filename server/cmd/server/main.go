@@ -230,6 +230,34 @@ func main() {
 		wsOrigins = append(wsOrigins, allowedOrigin)
 	}
 
+	// API_KEY: shared secret between the web frontend and this server (env on
+	// both sides). Browsers can't set headers on WS upgrades, so the key also
+	// rides as ?key=. Unset = no check (local dev).
+	apiKey := os.Getenv("API_KEY")
+	requireKey := func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if apiKey != "" && r.Method != http.MethodOptions && r.URL.Path != "/healthz" &&
+				r.Header.Get("x-api-key") != apiKey && r.URL.Query().Get("key") != apiKey {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			h.ServeHTTP(w, r)
+		})
+	}
+
+	// Lobby responses carry the live seated count (tables live in memory).
+	type tableOut struct {
+		store.GameTable
+		Seated int `json:"seated"`
+	}
+	withSeated := func(row *store.GameTable) tableOut {
+		seated := 0
+		if lt := mgr.Lookup(row.ID); lt != nil {
+			seated = lt.SeatedCount()
+		}
+		return tableOut{GameTable: *row, Seated: seated}
+	}
+
 	mux := http.NewServeMux()
 
 	// REST: tables. Writes + detail + history stay authed; the lobby list is
@@ -285,10 +313,11 @@ func main() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if rows == nil {
-			rows = []store.GameTable{} // nil marshals as JSON null; clients expect []
+		out := make([]tableOut, 0, len(rows))
+		for i := range rows {
+			out = append(out, withSeated(&rows[i]))
 		}
-		writeJSON(w, http.StatusOK, rows)
+		writeJSON(w, http.StatusOK, out)
 	}))
 
 	mux.Handle("GET /api/tables/{id}", handle(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -309,7 +338,35 @@ func main() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		writeJSON(w, http.StatusOK, row)
+		writeJSON(w, http.StatusOK, withSeated(row))
+	})))
+
+	// DELETE /api/tables/{id} — creator only (guests can't own tables).
+	mux.Handle("DELETE /api/tables/{id}", handle(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		uid := auth.UserID(r.Context())
+		if strings.HasPrefix(uid, "guest:") {
+			http.Error(w, "sign in to delete tables", http.StatusForbidden)
+			return
+		}
+		row, err := st.GetTable(r.Context(), r.PathValue("id"))
+		if err == store.ErrNotFound {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if row.CreatedBy == nil || *row.CreatedBy != uid {
+			http.Error(w, "only the table creator can delete it", http.StatusForbidden)
+			return
+		}
+		if err := st.DeleteTable(r.Context(), row.ID); err != nil && err != store.ErrNotFound {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		mgr.Drop(row.ID) // stop the live table even if the row was already gone
+		w.WriteHeader(http.StatusNoContent)
 	})))
 
 	// REST: hand history (newest first, ?limit=50 default).
@@ -360,9 +417,40 @@ func main() {
 	})
 
 	addr := env("PORT", "8080")
+
+	// Idle-table reaper: live tables empty ≥30min (and not mid-hand) are
+	// closed + deleted; store rows nobody has opened for 24h are deleted.
+	go func() {
+		for {
+			time.Sleep(10 * time.Minute)
+			for _, id := range mgr.Sweep(30 * time.Minute) {
+				log.Printf("reaper: removed idle table %s", id)
+				if st != nil {
+					if err := st.DeleteTable(context.Background(), id); err != nil && err != store.ErrNotFound {
+						log.Printf("reaper: delete table %s: %v", id, err)
+					}
+				}
+			}
+			if st != nil {
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				rows, err := st.ListTables(ctx)
+				cancel()
+				if err == nil {
+					for _, row := range rows {
+						if mgr.Lookup(row.ID) == nil && time.Since(row.CreatedAt) > 24*time.Hour {
+							if err := st.DeleteTable(ctx, row.ID); err == nil {
+								log.Printf("reaper: removed stale table %s", row.ID)
+							}
+						}
+					}
+				}
+			}
+		}
+	}()
+
 	srv := &http.Server{
 		Addr:              ":" + addr,
-		Handler:           logRequests(cors(allowedOrigin, mux)),
+		Handler:           logRequests(cors(allowedOrigin, requireKey(mux))),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	log.Printf("server: listening on :%s", addr)
@@ -393,7 +481,7 @@ func logRequests(h http.Handler) http.Handler {
 func cors(allowedOrigin string, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
