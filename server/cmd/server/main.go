@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -406,7 +407,12 @@ func main() {
 
 	// Guest tokens: anyone can mint one (POST /api/auth/guest) and join via a
 	// shared link; table creation still requires a signed-in Supabase account.
+	guestGate := newIPGate(30, time.Hour)
 	mux.HandleFunc("POST /api/auth/guest", func(w http.ResponseWriter, r *http.Request) {
+		if !guestGate.allow(clientIP(r)) {
+			http.Error(w, "too many requests", http.StatusTooManyRequests)
+			return
+		}
 		writeJSON(w, http.StatusOK, map[string]string{"token": auth.NewGuestToken()})
 	})
 
@@ -455,6 +461,69 @@ func main() {
 	}
 	log.Printf("server: listening on :%s", addr)
 	log.Fatal(srv.ListenAndServe())
+}
+
+// ipGate: fixed-window per-IP rate limit — keeps the one unauthenticated
+// endpoint (guest minting) from being flooded. 30/hour is far above a real
+// game night (tokens live in localStorage; a whole table on one WiFi mints
+// once per browser).
+type ipGate struct {
+	mu     sync.Mutex
+	counts map[string]struct {
+		n     int
+		reset time.Time
+	}
+	limit  int
+	window time.Duration
+}
+
+func newIPGate(limit int, window time.Duration) *ipGate {
+	return &ipGate{counts: map[string]struct {
+		n     int
+		reset time.Time
+	}{}, limit: limit, window: window}
+}
+
+func (g *ipGate) allow(ip string) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	// bound memory: when the map grows past known-player scale, drop expired
+	// windows (a full table plus lurkers is <100 entries)
+	if len(g.counts) > 4096 {
+		now := time.Now()
+		for k, c := range g.counts {
+			if now.After(c.reset) {
+				delete(g.counts, k)
+			}
+		}
+	}
+	c, ok := g.counts[ip]
+	now := time.Now()
+	if !ok || now.After(c.reset) {
+		g.counts[ip] = struct {
+			n     int
+			reset time.Time
+		}{n: 1, reset: now.Add(g.window)}
+		return true
+	}
+	if c.n >= g.limit {
+		return false
+	}
+	c.n++
+	g.counts[ip] = c
+	return true
+}
+
+// clientIP: fly's proxy injects Fly-Client-IP; fall back to the socket addr.
+func clientIP(r *http.Request) string {
+	if v := r.Header.Get("Fly-Client-IP"); v != "" {
+		return v
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
