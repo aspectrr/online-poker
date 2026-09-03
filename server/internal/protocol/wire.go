@@ -38,6 +38,7 @@ type TableState struct {
 	Board          [][]Card      `json:"board,omitempty"`
 	Pot            int64         `json:"pot,omitempty"`
 	YourCards      []Card        `json:"your_cards,omitempty"`  // private, this seat only
+	YourHand       string        `json:"your_hand,omitempty"`   // viewer's current made hand ("two_pair")
 	ToActSeat      *int          `json:"to_act_seat,omitempty"` // nil = nobody
 	DeadlineUnixMs int64         `json:"deadline_unix_ms,omitempty"`
 	LegalActions   *LegalActions `json:"legal_actions,omitempty"`

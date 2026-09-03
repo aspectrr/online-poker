@@ -33,6 +33,7 @@ const (
 	EvDropDecided    EventType = "drop_decided"     // PRIVATE ack to one seat: decision locked
 	EvDropReveal     EventType = "drop_reveal"      // all in — decisions + pot resolution follow
 	EvDropReplenish  EventType = "drop_replenish"   // losing stayer matches the pot
+	EvDropHoles      EventType = "drop_holes"       // fresh hole cards dealt to start a drop round (transport fans out privately)
 )
 
 // DropDecision: one seat's revealed stay/drop choice.

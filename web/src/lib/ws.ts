@@ -2,7 +2,9 @@ import type { ClientMsg, ServerMsg } from "./protocol";
 
 /**
  * Typed WS client with auto-reconnect (exponential backoff + jitter).
- * Token rides the upgrade URL as ?token= (auth.Middleware reads it).
+ * Token rides the upgrade URL as ?token= (auth.Middleware reads it) and is
+ * re-resolved per attempt via `token` — a token minted while the server was
+ * cold must not be retried forever.
  */
 export class TableSocket {
   private ws: WebSocket | null = null;
@@ -10,26 +12,28 @@ export class TableSocket {
   private attempt = 0;
   private timer: number | null = null;
   private url: string;
-  private token: string;
+  private token: () => Promise<string | null | undefined>;
   private onMsg: (m: ServerMsg) => void;
   private onStatus?: (s: "connecting" | "open" | "closed") => void;
 
   constructor(
     url: string, // wss://…/api/tables/{id}/ws
-    token: string,
+    token: string | (() => Promise<string | null | undefined>),
     onMsg: (m: ServerMsg) => void,
     onStatus?: (s: "connecting" | "open" | "closed") => void,
   ) {
     this.url = url;
-    this.token = token;
+    this.token = typeof token === "string" ? () => Promise.resolve(token) : token;
     this.onMsg = onMsg;
     this.onStatus = onStatus;
   }
 
-  connect() {
+  async connect() {
     if (this.closed) return;
     this.onStatus?.("connecting");
-    const url = `${this.url}?token=${encodeURIComponent(this.token)}`;
+    const tok = (await this.token()) ?? "";
+    const sep = this.url.includes("?") ? "&" : "?";
+    const url = `${this.url}${sep}token=${encodeURIComponent(tok)}`;
     const ws = new WebSocket(url);
     this.ws = ws;
     ws.onopen = () => {
@@ -55,7 +59,7 @@ export class TableSocket {
   private scheduleReconnect() {
     const delay = Math.min(30000, 500 * 2 ** this.attempt) + Math.random() * 250;
     this.attempt++;
-    this.timer = window.setTimeout(() => this.connect(), delay);
+    this.timer = window.setTimeout(() => void this.connect(), delay);
   }
 
   send(m: ClientMsg) {
@@ -72,6 +76,7 @@ export class TableSocket {
 }
 
 /** Build the WS URL for a table from the API base (VITE_API_URL). */
-export function tableWsUrl(apiBase: string, tableId: string): string {
-  return apiBase.replace(/^http/, "ws") + `/api/tables/${tableId}/ws`;
+export function tableWsUrl(apiBase: string, tableId: string, apiKey?: string): string {
+  const base = apiBase.replace(/^http/, "ws") + `/api/tables/${tableId}/ws`;
+  return apiKey ? `${base}?key=${encodeURIComponent(apiKey)}` : base;
 }

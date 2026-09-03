@@ -173,3 +173,55 @@ func HandCategoryName(v uint32) string {
 		return "high_card"
 	}
 }
+
+// EvaluatePartial: best 5-card value from 5..7 cards — live hand naming
+// on earlier streets (flop = 5 cards, turn = 6, river = full Evaluate7).
+func EvaluatePartial(cards []Card) uint32 {
+	switch len(cards) {
+	case 5:
+		var h [5]Card
+		copy(h[:], cards)
+		return eval5(h)
+	case 6:
+		best := uint32(0)
+		for skip := 0; skip < 6; skip++ {
+			var h [5]Card
+			j := 0
+			for i := 0; i < 6; i++ {
+				if i != skip {
+					h[j] = cards[i]
+					j++
+				}
+			}
+			if v := eval5(h); v > best {
+				best = v
+			}
+		}
+		return best
+	default:
+		var h [7]Card
+		copy(h[:], cards)
+		return Evaluate7(h)
+	}
+}
+
+// EvaluatePLOPartial: PLO rule (exactly 2 hole + exactly 3 board) over a
+// board that may still be growing (3 = flop, 4 = turn, 5 = river).
+func EvaluatePLOPartial(hole [4]Card, board []Card) uint32 {
+	best := uint32(0)
+	for a := 0; a < 3; a++ {
+		for b := a + 1; b < 4; b++ {
+			for i := 0; i+2 < len(board); i++ {
+				for j := i + 1; j+1 < len(board); j++ {
+					for k := j + 1; k < len(board); k++ {
+						hand := [5]Card{hole[a], hole[b], board[i], board[j], board[k]}
+						if v := eval5(hand); v > best {
+							best = v
+						}
+					}
+				}
+			}
+		}
+	}
+	return best
+}

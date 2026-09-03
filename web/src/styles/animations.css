@@ -249,3 +249,18 @@
 .animate-in-left {
   animation: in-left 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* hold-to-peek hint under the hero's face-down cards (poker night: the
+   mechanic wasn't discoverable) */
+@keyframes peek-hint-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.peek-hint {
+  animation: peek-hint-pulse 1.6s ease-in-out infinite;
+}

@@ -1,30 +1,56 @@
 package engine
 
-import "fmt"
+import (
+	"fmt"
+)
 
-// Texas Drop: one HandRunner spans the whole game. Per round: fresh board
-// runs out, every in-hand player secretly picks stay or drop, then one
-// reveal resolves the round:
+// Texas Drop: one HandRunner spans the whole game. Each round is a
+// complete fresh hold'em hand: brand-new deck, fresh hole cards for
+// everyone still in, fresh full board — then every in-hand player secretly
+// picks stay or drop, and one reveal resolves the round:
 //
 //   - 1 stayer  -> takes the pot, game over
 //   - 2+ stayers -> best hand wins; each losing stayer pays the pot amount
-//     back in (capped at stack), fresh board, next round
-//   - 0 stayers -> everyone re-antes, fresh board, next round
+//     back in (capped at stack), next round
+//   - 0 stayers -> everyone re-antes, next round
 //
 // Dropping folds the seat (mucked, out of the drop game). Staying is free —
 // only losing stayers pay.
 
-// dealDropBoard: burn + full 5-card board for this round, then open the
-// stay/drop decision phase. ponytail: fresh deck from round 2 — a single
-// shared deck runs dry after 4 rounds 9-handed (18 hole + 8×5); round 1
-// keeps the initial deck so stacked-deck tests (and dealt-card history)
-// stay coherent.
+// dealDropBoard: each drop round is a complete fresh hold'em hand —
+// brand-new deck, fresh hole cards for everyone still in, fresh full
+// board (burn + 5). Prior rounds' cards are dead, so a brand-new deck
+// can't create live duplicates. Then the stay/drop decision phase opens.
 func (r *HandRunner) dealDropBoard() []Event {
 	var evs []Event
+	// round 1 keeps the dealt deck (its holes came from it); later rounds
+	// are complete fresh hands — brand-new deck, fresh hole cards for
+	// everyone still in. Prior rounds' cards are dead, so a brand-new deck
+	// can't create live duplicates.
 	if r.dropRound > 1 {
 		if d, err := NewDeck(); err == nil {
 			r.deck = d
 		}
+		fresh := map[int][]Card{}
+		for range 2 {
+			for i, p := range r.players {
+				if !p.inHand() {
+					continue
+				}
+				c, err := r.deck.Draw(1)
+				if err != nil {
+					break // can't happen: 2×9 cards + 6 fit a fresh deck
+				}
+				fresh[i] = append(fresh[i], c[0])
+				r.dealt = append(r.dealt, c[0])
+			}
+		}
+		var holes []HoleReveal
+		for i, cards := range fresh {
+			r.players[i].hole = cards
+			holes = append(holes, HoleReveal{Seat: r.players[i].seat, Cards: cards})
+		}
+		evs = append(evs, Event{Type: EvDropHoles, HandID: r.handID, Round: r.dropRound, HoleCards: holes})
 	}
 	r.board = [][]Card{nil}
 	for _, n := range []int{3, 1, 1} {

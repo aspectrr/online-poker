@@ -1,6 +1,7 @@
 import { For, Show, createMemo } from "solid-js";
 import { money } from "../../lib/money";
 import type { SeatState, TableState } from "../../lib/tableTypes";
+import { HAND_LABELS } from "../../lib/tableTypes";
 import { TableCenter } from "./TableCenter";
 import { HeroHand } from "../cards/HeroHand";
 import { Card } from "../cards/Card";
@@ -93,9 +94,14 @@ export function TableMobile(props: {
                   peeking={props.peeking}
                   onPeekChange={props.onPeekChange}
                 />
-                <Show when={!props.peeking && !handOver() && heroDealt() > 0}>
+                <Show when={!props.peeking && !handOver() && heroDealt() > 0 && !t().heroHand}>
                   <span class="pointer-events-none absolute -bottom-5 left-1/2 -translate-x-1/2 text-[10px] font-medium text-fg-faint [@media(max-height:559px)]:hidden">
                     hold to peek
+                  </span>
+                </Show>
+                <Show when={t().heroHand}>
+                  <span class="absolute -bottom-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-pill bg-surface/90 px-2 py-0.5 text-[10px] font-semibold text-accent">
+                    {HAND_LABELS[t().heroHand] ?? t().heroHand}
                   </span>
                 </Show>
               </div>
@@ -110,7 +116,7 @@ export function TableMobile(props: {
               )}
             >
               <div class="text-[13px] font-semibold text-accent">you</div>
-              <Show when={h().stackCents < 100 * t().bbCents && t().rebuysUsed < 3}>
+              <Show when={h().stackCents < 10 * t().bbCents && t().rebuysUsed < 3}>
                 <Show
                   when={!t().topUpQueued}
                   fallback={

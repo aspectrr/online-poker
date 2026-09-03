@@ -8,6 +8,8 @@ import { authIdentity } from "./identity";
  */
 const API_URL = import.meta.env.VITE_API_URL;
 export const MOCK_MODE = !API_URL;
+// Shared secret with the game server (env on both sides); unset in dev.
+const API_KEY = import.meta.env.VITE_API_KEY as string | undefined;
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const id = await authIdentity();
@@ -15,9 +17,14 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const auth = id ? `${sep}token=${encodeURIComponent(id.token)}` : "";
   const res = await fetch(`${API_URL}${path}${auth}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers: {
+      "Content-Type": "application/json",
+      ...(API_KEY ? { "x-api-key": API_KEY } : {}),
+      ...init?.headers,
+    },
   });
   if (!res.ok) throw new Error(`${init?.method ?? "GET"} ${path} failed: ${res.status}`);
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
@@ -73,7 +80,7 @@ export function listTables(): Promise<TableSummary[]> {
   );
 }
 
-/** server store.GameTable row (no json tags on the struct → Go field names) */
+/** server tableOut row (embedded store.GameTable → Go field names + seated). */
 function rowToSummary(r: Record<string, unknown>): TableSummary {
   const cfg = (r.Config ?? {}) as Record<string, unknown>;
   const blinds = (cfg.blinds_sb_bb as number[] | undefined) ?? [10, 20];
@@ -83,8 +90,9 @@ function rowToSummary(r: Record<string, unknown>): TableSummary {
     gameType: r.GameType === "PLO4" || r.game_type === "PLO4" ? "PLO4" : "NLHE",
     smallBlindCents: blinds[0],
     bigBlindCents: blinds[1],
-    seatsFilled: 0,
+    seatsFilled: Number(r.seated ?? 0),
     maxSeats: Number(cfg.max_seats ?? 9),
+    createdBy: (r.CreatedBy as string | null) ?? null,
   };
 }
 
@@ -144,4 +152,11 @@ export function createTable(config: TableConfig): Promise<TableSummary> {
 export function fetchHands(tableId: string, limit = 50): Promise<HandRow[]> {
   if (MOCK_MODE) return Promise.resolve([]);
   return req<HandRow[]>(`/api/tables/${encodeURIComponent(tableId)}/hands?limit=${limit}`);
+}
+
+/** Delete a table (creator-only, enforced server-side). */
+export function deleteTable(tableId: string): Promise<void> {
+  return req<void>(`/api/tables/${encodeURIComponent(tableId)}`, { method: "DELETE" }).then(
+    () => undefined,
+  );
 }

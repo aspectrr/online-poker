@@ -1,11 +1,13 @@
-import { For, Show, createSignal } from "solid-js";
+import { For, Show, createSignal, onMount } from "solid-js";
+import { A } from "@solidjs/router";
 import { Button } from "./ui/Button";
 import { Dialog, DialogContent, DialogTrigger } from "./ui/Dialog";
 import { Field, Select } from "./ui/Select";
 import { Input } from "./ui/Input";
 import { Slider } from "./ui/Slider";
 import { SwitchRow } from "./ui/Switch";
-import { createTable } from "../lib/api";
+import { createTable, MOCK_MODE } from "../lib/api";
+import { authIdentity } from "../lib/identity";
 import { money } from "../lib/money";
 import {
   DEFAULT_TABLE_CONFIG,
@@ -38,6 +40,13 @@ export function CreateTableDialog(props: { onCreated: () => void }) {
   const [open, setOpen] = createSignal(false);
   const [config, setConfig] = createSignal<TableConfig>({ ...DEFAULT_TABLE_CONFIG });
   const [saving, setSaving] = createSignal(false);
+  // table creation is signed-in-only (server enforces it; mirror in the UI)
+  const [guest, setGuest] = createSignal(false);
+  onMount(async () => {
+    if (MOCK_MODE) return;
+    const id = await authIdentity().catch(() => null);
+    setGuest(!id || id.isGuest);
+  });
   const set = (patch: Partial<TableConfig>) => setConfig((c) => ({ ...c, ...patch }));
   const [trigger, setTrigger] = createSignal({ ...DEFAULT_TRIGGER });
   // Starting stack entry unit: big blinds or dollars (server always stores bb).
@@ -61,20 +70,31 @@ export function CreateTableDialog(props: { onCreated: () => void }) {
 
   return (
     <Dialog open={open()} onOpenChange={setOpen}>
-      <DialogTrigger as={Button} class="gap-1.5">
-        <svg
-          aria-hidden="true"
-          class="size-4"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.2"
-          stroke-linecap="round"
-        >
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-        Create table
-      </DialogTrigger>
+      <Show
+        when={!guest()}
+        fallback={
+          <A href="/auth">
+            <Button variant="outline" class="gap-1.5">
+              Sign in to create a table
+            </Button>
+          </A>
+        }
+      >
+        <DialogTrigger as={Button} class="gap-1.5">
+          <svg
+            aria-hidden="true"
+            class="size-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          Create table
+        </DialogTrigger>
+      </Show>
       <DialogContent
         title="Create a table"
         description="Defaults to 0.10/0.20 NLHE, 100bb, 15s action clock."

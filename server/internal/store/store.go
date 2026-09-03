@@ -204,6 +204,18 @@ func (s *Store) ListTables(ctx context.Context) ([]GameTable, error) {
 
 var ErrNotFound = errors.New("store: not found")
 
+// DeleteTable removes a table row (hands cascade). ErrNotFound when absent.
+func (s *Store) DeleteTable(ctx context.Context, id string) error {
+	tag, err := s.pool.Exec(ctx, `delete from game_tables where id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("store: delete game_tables: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // GetTable returns one table by id.
 func (s *Store) GetTable(ctx context.Context, id string) (*GameTable, error) {
 	row := s.pool.QueryRow(ctx,

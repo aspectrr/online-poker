@@ -77,6 +77,7 @@ export type TableSnapshot = {
   board?: Card[][];
   pot?: number;
   your_cards?: Card[];
+  your_hand?: string;
   to_act_seat?: number;
   deadline_unix_ms?: number;
   rebuys_used?: number;
@@ -292,6 +293,7 @@ export type TableState = {
   potCents: number; // total in pot incl. street bets
   board: BoardState;
   holeCards: UICard[][]; // per hero only, rows for double-board games
+  heroHand: string; // viewer's current made hand ("two_pair", "" = none)
   toAct: number; // seat or -1
   deadlineUnixMs: number | null;
   rebuysUsed: number;
