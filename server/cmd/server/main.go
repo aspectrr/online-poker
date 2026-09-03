@@ -581,6 +581,16 @@ func (h *memHands) InsertHand(_ context.Context, tableID string, handNo int, dat
 	return &row, nil
 }
 
+func (h *memHands) LastHand(_ context.Context, tableID string) (json.RawMessage, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	all := h.tables[tableID]
+	if len(all) == 0 {
+		return nil, store.ErrNotFound
+	}
+	return all[len(all)-1].Data, nil
+}
+
 func (h *memHands) ListHands(_ context.Context, tableID string, limit int) ([]store.Hand, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()

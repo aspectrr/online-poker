@@ -7,6 +7,7 @@ package table
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -26,6 +27,9 @@ const (
 // Persister is the subset of *store.Store tables need.
 type Persister interface {
 	InsertHand(ctx context.Context, tableID string, handNo int, data json.RawMessage) (*store.Hand, error)
+	// LastHand: newest persisted hand for the table (store.ErrNotFound when
+	// none) — used to restore player stacks after a server restart.
+	LastHand(ctx context.Context, tableID string) (json.RawMessage, error)
 }
 
 // seat: one chair.
@@ -106,6 +110,10 @@ type Table struct {
 	// persistedNo: last hand_no written (post-hand prompt flow calls
 	// persistHand twice per hand otherwise)
 	persistedNo int64
+	// restore: userID → last recorded stack from the newest persisted hand,
+	// loaded once on first join after a restart (real-money durability)
+	restore       map[string]int64
+	restoreLoaded bool
 
 	inbox   chan inbox
 	persist Persister
@@ -201,6 +209,7 @@ func New(row store.GameTable, persist Persister, dev bool) *Table {
 		ctx:     ctx,
 		stop:    cancel,
 		dev:     dev,
+		restore: map[string]int64{},
 	}
 	for i := range t.seats {
 		t.seats[i] = &seat{seat: i}
@@ -441,7 +450,15 @@ func (t *Table) join(c *ws.Client, m protocol.ClientMsg) {
 	s.userID = uid
 	s.conn = c
 	s.name = sanitizeName(m.Name, uid)
-	s.stack = t.joinStack(m.Stack)
+	t.loadRestore()
+	if recorded, ok := t.restore[uid]; ok {
+		// real chips: a returning player gets their last recorded stack back,
+		// not a fresh buy-in
+		s.stack = recorded
+		c.TrySend(protocol.ServerMsg{Type: "error", Error: fmt.Sprintf("stack restored from your last session: $%.2f", float64(recorded)/100)})
+	} else {
+		s.stack = t.joinStack(m.Stack)
+	}
 	s.sittingOut = false
 	s.lastAction = ""
 	s.pendingTopUp = 0

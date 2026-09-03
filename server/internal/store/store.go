@@ -234,6 +234,21 @@ func (s *Store) GetTable(ctx context.Context, id string) (*GameTable, error) {
 	return &t, nil
 }
 
+// ListHands returns the newest `limit` hands for a table.
+func (s *Store) LastHand(ctx context.Context, tableID string) (json.RawMessage, error) {
+	var data []byte
+	err := s.pool.QueryRow(ctx,
+		`select data from hands where table_id = $1 order by hand_no desc limit 1`, tableID).
+		Scan(&data)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("store: last hand: %w", err)
+	}
+	return data, nil
+}
+
 // InsertHand appends a hand history row.
 func (s *Store) InsertHand(ctx context.Context, tableID string, handNo int, data json.RawMessage) (*Hand, error) {
 	row := s.pool.QueryRow(ctx,
