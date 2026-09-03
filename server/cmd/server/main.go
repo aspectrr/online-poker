@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/aspectrr/online-poker/server/internal/auth"
+	"github.com/aspectrr/online-poker/server/internal/lobby"
+	"github.com/aspectrr/online-poker/server/internal/protocol"
 	"github.com/aspectrr/online-poker/server/internal/store"
 	"github.com/aspectrr/online-poker/server/internal/table"
 	"github.com/aspectrr/online-poker/server/internal/ws"
@@ -118,6 +120,20 @@ func main() {
 	}
 	// devLookup: dev-mode row lookup for the WS path (set when dev tables on)
 	var devLookup func(id string) *store.GameTable
+	// Lobby WS snapshot (set per mode below; nil disables the lobby WS)
+	var lobbySnapshot func() []protocol.LobbyTable
+	lobbyRow := func(row *store.GameTable, seated int) protocol.LobbyTable {
+		sb, bb := int64(10), int64(20)
+		if len(row.Config.BlindsSBBB) == 2 {
+			sb, bb = row.Config.BlindsSBBB[0], row.Config.BlindsSBBB[1]
+		}
+		return protocol.LobbyTable{
+			ID: row.ID, Name: row.Name, GameType: row.GameType,
+			SmallBlind: sb, BigBlind: bb,
+			MaxSeats: row.Config.MaxSeats, Seated: seated,
+			CreatedBy: row.CreatedBy,
+		}
+	}
 	if devAuth && st == nil {
 		var mu sync.Mutex
 		created := map[string]store.GameTable{}
@@ -142,6 +158,25 @@ func main() {
 				rows = append(rows, &row)
 			}
 			writeJSON(w, http.StatusOK, rows)
+		}
+		lobbySnapshot = func() []protocol.LobbyTable {
+			mu.Lock()
+			defer mu.Unlock()
+			out := []protocol.LobbyTable{lobbyRow(devRow(), func() int {
+				if lt := mgr.Lookup("dev-table"); lt != nil {
+					return lt.SeatedCount()
+				}
+				return 0
+			}())}
+			for id := range created {
+				row := created[id]
+				seated := 0
+				if lt := mgr.Lookup(id); lt != nil {
+					seated = lt.SeatedCount()
+				}
+				out = append(out, lobbyRow(&row, seated))
+			}
+			return out
 		}
 		getTable = func(w http.ResponseWriter, r *http.Request) {
 			row := devRowByID(r.PathValue("id"))
@@ -259,6 +294,9 @@ func main() {
 		return tableOut{GameTable: *row, Seated: seated}
 	}
 
+	// Lobby WS snapshot: same data as GET /api/tables, reduced to the wire
+	// shape the lobby renders. Set per mode (real store or dev tables); nil
+	// disables the lobby WS (no database, non-dev).
 	mux := http.NewServeMux()
 
 	// REST: tables. Writes + detail + history stay authed; the lobby list is
@@ -320,6 +358,37 @@ func main() {
 		}
 		writeJSON(w, http.StatusOK, out)
 	}))
+
+	if st != nil {
+		lobbySnapshot = func() []protocol.LobbyTable {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			rows, err := st.ListTables(ctx)
+			if err != nil {
+				return nil // keep last snapshot; next tick retries
+			}
+			out := make([]protocol.LobbyTable, 0, len(rows))
+			for i := range rows {
+				out = append(out, lobbyRow(&rows[i], withSeated(&rows[i]).Seated))
+			}
+			return out
+		}
+	}
+
+	// WS: /api/lobby/ws — public read-only lobby feed (matches the public
+	// GET /api/tables). No auth token; API key still applies via requireKey.
+	// The hub diffs a 2s snapshot and pushes the list only when it changed,
+	// so seat counts / created / deleted tables go live without polling.
+	if lobbySnapshot != nil {
+		lobbyHub := lobby.NewHub()
+		mux.Handle("GET /api/lobby/ws", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			c := ws.Upgrade(w, r, "", func(*ws.Client, protocol.ClientMsg) {}, lobbyHub.Detach, wsOrigins...)
+			if c != nil {
+				lobbyHub.Attach(c, lobbySnapshot)
+			}
+		}))
+		go lobbyHub.Run(lobbySnapshot, 2*time.Second, make(chan struct{}))
+	}
 
 	mux.Handle("GET /api/tables/{id}", handle(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if st == nil {

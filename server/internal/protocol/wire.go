@@ -15,14 +15,28 @@ type ClientMsg struct {
 
 // ServerMsg is everything the server sends. Exactly one payload is set.
 type ServerMsg struct {
-	Type  string          `json:"type"` // state | event | error | chat | seats | action_required | post_hand
+	Type  string          `json:"type"` // state | event | error | chat | seats | action_required | post_hand | lobby
 	State *TableState     `json:"state,omitempty"`
 	Event *Event          `json:"event,omitempty"`
 	Chat  *ChatMsg        `json:"chat,omitempty"`
 	Seats []SeatWire      `json:"seats,omitempty"`
 	Legal *LegalActions   `json:"legal,omitempty"` // type=action_required, to the actor
 	Post  *PostHandPrompt `json:"post,omitempty"`  // type=post_hand, to the winner
+	Lobby []LobbyTable    `json:"lobby,omitempty"` // type=lobby: full lobby list (snapshot on change)
 	Error string          `json:"error,omitempty"`
+}
+
+// LobbyTable: one row of the lobby list (the public GET /api/tables shape,
+// reduced to what the lobby renders + the live seated count).
+type LobbyTable struct {
+	ID         string  `json:"id"`
+	Name       string  `json:"name"`
+	GameType   string  `json:"game_type"`
+	SmallBlind int64   `json:"small_blind"`
+	BigBlind   int64   `json:"big_blind"`
+	MaxSeats   int     `json:"max_seats"`
+	Seated     int     `json:"seated"`
+	CreatedBy  *string `json:"created_by,omitempty"`
 }
 
 // TableState: full snapshot on join / reconnect.

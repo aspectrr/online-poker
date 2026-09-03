@@ -1,17 +1,31 @@
 import { For, Show, createResource, createSignal, onCleanup, onMount } from "solid-js";
+import { createStore, reconcile } from "solid-js/store";
 import { A, useNavigate } from "@solidjs/router";
 import { Logo } from "../components/Logo";
 import { Button } from "../components/ui/Button";
 import { CreateTableDialog } from "../components/CreateTableDialog";
 import { FeedbackDialog } from "../components/FeedbackDialog";
-import { MOCK_MODE, deleteTable, listTables } from "../lib/api";
+import { MOCK_MODE, apiBase, apiKey, deleteTable, listTables } from "../lib/api";
 import { supabase } from "../lib/supabase";
 import { blinds, money } from "../lib/money";
 import type { TableSummary } from "../lib/types";
+import type { LobbyTableWire } from "../lib/protocol";
+import { TableSocket, lobbyWsUrl } from "../lib/ws";
 import { cn } from "../lib/cn";
 
 // Seat pip hues — rotate the Notion accent cast (DESIGN.md)
 const PIP_HUES = ["bg-sky-wash", "bg-marigold", "bg-coral", "bg-accent", "bg-midnight"];
+
+const toSummary = (w: LobbyTableWire): TableSummary => ({
+  id: w.id,
+  name: w.name,
+  gameType: w.game_type === "PLO4" ? "PLO4" : "NLHE",
+  smallBlindCents: w.small_blind,
+  bigBlindCents: w.big_blind,
+  seatsFilled: w.seated,
+  maxSeats: w.max_seats,
+  createdBy: w.created_by ?? null,
+});
 
 export function LobbyPage() {
   // Never let the fetcher reject — a rejected resource leaves the lobby
@@ -25,6 +39,39 @@ export function LobbyPage() {
   });
   const navigate = useNavigate();
   const failed = () => !tables.loading && tables.latest != null && !tables.latest.ok;
+
+  // Live lobby feed: the server pushes the full list whenever it changes
+  // (seat/join/leave, create, delete). reconcile by id keeps unchanged
+  // TableCards mounted so only the changed bits re-render (seat pips
+  // animate). The 5s resource poll below continues ONLY while the feed is
+  // down (fly cold start, proxy drop) — the WS snapshot on reconnect
+  // supersedes anything the poll fetched.
+  const [live, setLive] = createStore<{ rows: TableSummary[] }>({ rows: [] });
+  const [feedOpen, setFeedOpen] = createSignal(false);
+  const rows = (): TableSummary[] =>
+    feedOpen() ? live.rows : tables.latest?.ok ? tables.latest.rows : [];
+
+  onMount(() => {
+    if (MOCK_MODE) return;
+    const sock = new TableSocket(
+      lobbyWsUrl(apiBase, apiKey),
+      "", // lobby feed is public — no token
+      (m) => {
+        if (m.type === "lobby") {
+          setLive("rows", reconcile(m.lobby.map(toSummary), { key: "id" }));
+          setFeedOpen(true);
+        }
+      },
+      (s) => {
+        // feedOpen flips on only when a snapshot arrives (below) so an open
+        // socket with no snapshot yet falls back to resource rows instead
+        // of flashing "No tables yet"
+        if (s !== "open") setFeedOpen(false);
+      },
+    );
+    void sock.connect();
+    onCleanup(() => sock.close());
+  });
 
   // auth state for the nav (ASPTR-193e): sign out when a supabase session exists
   const [authed, setAuthed] = createSignal(false);
@@ -43,11 +90,11 @@ export function LobbyPage() {
     setAuthed(false);
   };
 
-  // live seat counts: poll while the lobby is visible
+  // live seat counts: poll only while the feed is down (visible tab)
   let poll: number | undefined;
   onMount(() => {
     poll = window.setInterval(() => {
-      if (!tables.loading) void refetch();
+      if (!feedOpen() && !tables.loading) void refetch();
     }, 5000);
   });
   onCleanup(() => window.clearInterval(poll));
@@ -56,6 +103,8 @@ export function LobbyPage() {
     if (!window.confirm(`Delete table “${t.name}”? Everyone is removed immediately.`)) return;
     try {
       await deleteTable(t.id);
+      // instant removal; the live feed reconciles the authoritative list ≤2s
+      setLive("rows", (rs) => rs.filter((r) => r.id !== t.id));
       void refetch();
     } catch (e) {
       alert(e instanceof Error ? e.message : String(e));
@@ -112,19 +161,25 @@ export function LobbyPage() {
             </h1>
             <p class="mt-1 text-sm text-fg-muted">
               <Show
-                when={tables.latest?.ok ? tables.latest.rows : undefined}
+                when={rows().length ? rows() : undefined}
                 fallback={failed() ? "Tables unavailable" : "Loading tables…"}
               >
-                {(rows) => (
+                {(rws) => (
                   <>
-                    {rows().length} live
+                    {rws().length} live
                     <Show when={MOCK_MODE}> · demo lobby, backend not configured</Show>
                   </>
                 )}
               </Show>
             </p>
           </div>
-          <CreateTableDialog onCreated={() => refetch()} />
+          <CreateTableDialog
+            onCreated={(t) => {
+              // instant appearance; the live feed reconciles the list ≤2s
+              setLive("rows", (rs) => (rs.some((r) => r.id === t.id) ? rs : [...rs, t]));
+              void refetch();
+            }}
+          />
         </div>
 
         <Show when={failed()}>
@@ -139,11 +194,15 @@ export function LobbyPage() {
           </div>
         </Show>
 
+        {/* stale-while-revalidate: rows() falls back to the resource while
+            the live feed is down, and latest holds last settled rows during
+            a poll refetch — keep the grid mounted instead of flashing the
+            skeleton; skeleton only on the initial load. */}
         <Show
-          when={!failed() && !tables.loading && tables.latest?.ok && tables.latest.rows.length}
+          when={!failed() && rows().length}
           fallback={
             <Show when={!failed()} fallback={null}>
-              <Show when={!tables.loading} fallback={<TableSkeleton />}>
+              <Show when={tables.latest != null} fallback={<TableSkeleton />}>
                 <div class="mt-10 grid place-items-center rounded-card border border-dashed border-black/15 bg-surface px-6 py-16 text-center">
                   <p class="font-medium text-fg">No tables yet</p>
                   <p class="mt-1 text-sm text-fg-muted">
@@ -155,7 +214,7 @@ export function LobbyPage() {
           }
         >
           <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <For each={tables.latest?.ok ? tables.latest.rows : []}>
+            <For each={rows()}>
               {(t) => (
                 <TableCard
                   table={t}

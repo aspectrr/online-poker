@@ -138,6 +138,18 @@ export type ChatMsg = { seat: number; player: string; text: string };
 
 export type PostHandPrompt = { seat: number; bounty: boolean; rabbit: boolean; reveal: boolean };
 
+/** One lobby row (ServerMsg `lobby` — the live tables list, wire case). */
+export type LobbyTableWire = {
+  id: string;
+  name: string;
+  game_type: string;
+  small_blind: number;
+  big_blind: number;
+  max_seats: number;
+  seated: number;
+  created_by?: string | null;
+};
+
 /** Client -> server message. */
 export type ClientMsg =
   | { type: "join"; seat: number; name?: string; stack?: number }
@@ -158,6 +170,7 @@ export type ServerMsg =
   | { type: "chat"; chat: ChatMsg }
   | { type: "action_required"; legal: LegalActionsWire }
   | { type: "post_hand"; post: PostHandPrompt }
+  | { type: "lobby"; lobby: LobbyTableWire[] }
   | { type: "error"; error: string };
 
 // ---- UI facade (consumed by components; camelCase, cents) ----

@@ -11,6 +11,10 @@ export const MOCK_MODE = !API_URL;
 // Shared secret with the game server (env on both sides); unset in dev.
 const API_KEY = import.meta.env.VITE_API_KEY as string | undefined;
 
+/** Live-origin base + key for non-HTTP transports (lobby WS). */
+export const apiBase = API_URL;
+export const apiKey = API_KEY;
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const id = await authIdentity();
   const sep = path.includes("?") ? "&" : "?";
