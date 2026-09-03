@@ -14,6 +14,7 @@ import {
   type BombPotMode,
   type GameType,
   type TableConfig,
+  type TableSummary,
 } from "../lib/types";
 import { cn } from "../lib/cn";
 
@@ -36,7 +37,7 @@ const SUIT_COLOR: Record<string, string> = {
 const DEFAULT_TRIGGER = { rank: "2", suits: [] as string[] };
 const SUIT_GLYPH: Record<string, string> = { s: "♠", h: "♥", d: "♦", c: "♣" };
 
-export function CreateTableDialog(props: { onCreated: () => void }) {
+export function CreateTableDialog(props: { onCreated: (t: TableSummary) => void }) {
   const [open, setOpen] = createSignal(false);
   const [config, setConfig] = createSignal<TableConfig>({ ...DEFAULT_TABLE_CONFIG });
   const [saving, setSaving] = createSignal(false);
@@ -59,10 +60,10 @@ export function CreateTableDialog(props: { onCreated: () => void }) {
     e.preventDefault();
     setSaving(true);
     try {
-      await createTable({ ...config(), bombPotTrigger: trigger() });
+      const created = await createTable({ ...config(), bombPotTrigger: trigger() });
       setOpen(false);
       setConfig({ ...DEFAULT_TABLE_CONFIG });
-      props.onCreated();
+      props.onCreated(created);
     } finally {
       setSaving(false);
     }

@@ -80,3 +80,9 @@ export function tableWsUrl(apiBase: string, tableId: string, apiKey?: string): s
   const base = apiBase.replace(/^http/, "ws") + `/api/tables/${tableId}/ws`;
   return apiKey ? `${base}?key=${encodeURIComponent(apiKey)}` : base;
 }
+
+/** Build the lobby feed WS URL (public, no token). */
+export function lobbyWsUrl(apiBase: string, apiKey?: string): string {
+  const base = apiBase.replace(/^http/, "ws") + "/api/lobby/ws";
+  return apiKey ? `${base}?key=${encodeURIComponent(apiKey)}` : base;
+}
