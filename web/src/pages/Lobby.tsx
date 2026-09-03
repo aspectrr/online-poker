@@ -139,11 +139,14 @@ export function LobbyPage() {
           </div>
         </Show>
 
+        {/* stale-while-revalidate: latest holds the last settled rows during a
+            poll refetch, so keep the grid mounted instead of flashing the
+            skeleton every 5s; skeleton only on the initial load. */}
         <Show
-          when={!failed() && !tables.loading && tables.latest?.ok && tables.latest.rows.length}
+          when={!failed() && tables.latest?.ok && tables.latest.rows.length}
           fallback={
             <Show when={!failed()} fallback={null}>
-              <Show when={!tables.loading} fallback={<TableSkeleton />}>
+              <Show when={tables.latest != null} fallback={<TableSkeleton />}>
                 <div class="mt-10 grid place-items-center rounded-card border border-dashed border-black/15 bg-surface px-6 py-16 text-center">
                   <p class="font-medium text-fg">No tables yet</p>
                   <p class="mt-1 text-sm text-fg-muted">
