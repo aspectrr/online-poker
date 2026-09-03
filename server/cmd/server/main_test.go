@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -65,5 +66,23 @@ func TestClientIPFallsBackToRemoteAddr(t *testing.T) {
 	r.Header.Set("Fly-Client-IP", "203.0.113.9")
 	if got := clientIP(r); got != "203.0.113.9" {
 		t.Fatalf("clientIP = %q, want 203.0.113.9", got)
+	}
+}
+
+// CORS must explicitly allow the x-api-key header — the browser preflights
+// any request carrying it, and a preflight without it fails closed
+// (net::ERR_FAILED on every lobby request).
+func TestCORSPreflightAllowsAPIKeyHeader(t *testing.T) {
+	req := httptest.NewRequest("OPTIONS", "/api/tables", nil)
+	req.Header.Set("Origin", "https://poker.collinpfeifer.dev")
+	req.Header.Set("Access-Control-Request-Method", "GET")
+	req.Header.Set("Access-Control-Request-Headers", "x-api-key")
+	rec := httptest.NewRecorder()
+	cors("https://poker.collinpfeifer.dev", http.NotFoundHandler()).ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("preflight status = %d, want 204", rec.Code)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Headers"); !strings.Contains(strings.ToLower(got), "x-api-key") {
+		t.Fatalf("Access-Control-Allow-Headers = %q, must include x-api-key", got)
 	}
 }
