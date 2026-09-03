@@ -12,6 +12,51 @@ import (
 
 // ---- hand lifecycle ----
 
+// seatUserIDs: seat → userID for the players dealt into the current hand —
+// persisted with each hand so stacks can be restored to the right person
+// after a restart (display names aren't unique or stable).
+func (t *Table) seatUserIDs() map[int]string {
+	out := map[int]string{}
+	for _, fs := range t.handStart {
+		if s := t.seatByNo(fs.Seat); s != nil && s.userID != "" {
+			out[fs.Seat] = s.userID
+		}
+	}
+	return out
+}
+
+// loadRestore: read the newest persisted hand once and remember each
+// player's final stack by userID. join() offers these stacks back so a
+// server restart (deploy, machine stop) doesn't wipe real chip counts.
+func (t *Table) loadRestore() {
+	if t.restoreLoaded || t.persist == nil {
+		return
+	}
+	t.restoreLoaded = true
+	data, err := t.persist.LastHand(t.ctx, t.row.ID)
+	if err != nil {
+		return // fresh table (or store hiccup): nothing to restore
+	}
+	var last struct {
+		Stacks  []engine.FinalStack `json:"stacks"`
+		UserIDs map[int]string      `json:"user_ids"`
+	}
+	if err := json.Unmarshal(data, &last); err != nil {
+		log.Printf("table %s: restore: parse last hand: %v", t.row.ID, err)
+		return
+	}
+	for _, st := range last.Stacks {
+		uid, ok := last.UserIDs[st.Seat]
+		if !ok || uid == "" || st.Stack <= 0 {
+			continue
+		}
+		t.restore[uid] = st.Stack
+	}
+	if len(t.restore) > 0 {
+		log.Printf("table %s: %d stack(s) available for restore", t.row.ID, len(t.restore))
+	}
+}
+
 // seatedCount: occupied seats not sitting out.
 func (t *Table) seatedCount() int {
 	n := 0
@@ -447,6 +492,7 @@ func (t *Table) persistHand() {
 		"holes":        holes,
 		"events":       t.handEvents,
 		"stacks":       t.runner.Stacks(),
+		"user_ids":     t.seatUserIDs(),
 	}
 	data, err := json.Marshal(hist)
 	if err == nil {
