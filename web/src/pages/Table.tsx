@@ -21,7 +21,6 @@ import { TableMobile } from "../components/table/TableMobile";
 import { ActionBar } from "../components/table/ActionBar";
 import { SettingsDrawer } from "../components/table/SettingsDrawer";
 import { HistoryDrawer } from "../components/table/HistoryDrawer";
-import { FeedbackDialog } from "../components/FeedbackDialog";
 import { Card } from "../components/cards/Card";
 import { RabbitMark } from "../components/cards/RabbitMark";
 import { blinds, money } from "../lib/money";
@@ -570,9 +569,6 @@ export function TablePage() {
         class="absolute inset-x-0 bottom-0 z-40 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6"
       >
         <ActionBar table={t()} send={(a) => store.send(a)} error={store.lastError} />
-        <div class="absolute bottom-1 right-3 sm:right-6">
-          <FeedbackDialog />
-        </div>
       </footer>
 
       {/* toasts (7-2 bounty gold, rabbit hunt mascot) — side cards, not

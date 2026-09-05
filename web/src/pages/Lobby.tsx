@@ -4,7 +4,6 @@ import { A, useNavigate } from "@solidjs/router";
 import { Logo } from "../components/Logo";
 import { Button } from "../components/ui/Button";
 import { CreateTableDialog } from "../components/CreateTableDialog";
-import { FeedbackDialog } from "../components/FeedbackDialog";
 import { MOCK_MODE, apiBase, apiKey, deleteTable, listTables } from "../lib/api";
 import { supabase } from "../lib/supabase";
 import { blinds, money } from "../lib/money";
@@ -227,11 +226,6 @@ export function LobbyPage() {
           </div>
         </Show>
       </main>
-
-      {/* feedback (ASPTR-192) */}
-      <footer class="flex justify-center border-t border-line/60 py-3">
-        <FeedbackDialog />
-      </footer>
     </div>
   );
 }
