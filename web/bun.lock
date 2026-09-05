@@ -5,7 +5,7 @@
     "": {
       "name": "web",
       "dependencies": {
-        "@aspectrr/feedback-widget": "^0.1.0",
+        "@aspectrr/feedback-widget": "^0.1.4",
         "@kobalte/core": "^0.13.13",
         "@solidjs/router": "^1.0.0",
         "@supabase/supabase-js": "^2.112.4",
@@ -26,7 +26,7 @@
     },
   },
   "packages": {
-    "@aspectrr/feedback-widget": ["@aspectrr/feedback-widget@0.1.0", "https://npm.pkg.github.com/download/@aspectrr/feedback-widget/0.1.0/eee7ae52a91edfe398a0296af9edc33d1fe3aa00", { "dependencies": { "@kobalte/core": "^0.13.10", "modern-screenshot": "^4.6.0" }, "peerDependencies": { "solid-js": "^1.8.0" } }, "sha512-qhAHcg1j9ragD/bzHjI7oBa8vssVqFvqdeMRIXuxg4L/Xy6cQCM/mk4ZUfDwf0a7YKJMSMUC7ahsu9qOyMBdVA=="],
+    "@aspectrr/feedback-widget": ["@aspectrr/feedback-widget@0.1.4", "", { "dependencies": { "@kobalte/core": "^0.13.10", "modern-screenshot": "^4.6.0" }, "peerDependencies": { "solid-js": "^1.8.0" } }, "sha512-dX403CYK2IUXCYijqF0KV+4Oji29MpfLr6qLEc/i+/+I2hKSyVoMZ5Ciaj/F8X7Wi3NeZwskkkRnvEm/xZ96Wg=="],
 
     "@babel/code-frame": ["@babel/code-frame@7.29.7", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.29.7", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw=="],
 
