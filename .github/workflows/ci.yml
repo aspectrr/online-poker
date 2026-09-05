@@ -34,9 +34,16 @@ jobs:
 
   web:
     runs-on: ubuntu-latest
+    permissions:
+      packages: read # @aspectrr/feedback-widget ships via GitHub Packages
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+      - name: GitHub Packages auth (@aspectrr scope)
+        working-directory: web
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '@aspectrr:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=%s\n' "$GH_TOKEN" > .npmrc
       - name: install
         working-directory: web
         run: bun install --frozen-lockfile
