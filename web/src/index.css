@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "./styles/animations.css";
 
+/* feedback widget ships hardcoded zinc classes — scan it or styles get purged */
+@source "../node_modules/@aspectrr/feedback-widget";
+
 /* Design tokens — Notion warm-light theme (DESIGN.md) */
 :root {
   /* Surfaces */

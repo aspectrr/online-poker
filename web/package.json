@@ -13,6 +13,7 @@
     "check": "bun src/lib/betting.check.ts && bun src/lib/chips.check.ts"
   },
   "dependencies": {
+    "@aspectrr/feedback-widget": "^0.1.0",
     "@kobalte/core": "^0.13.13",
     "@solidjs/router": "^1.0.0",
     "@supabase/supabase-js": "^2.112.4",
