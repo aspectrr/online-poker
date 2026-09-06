@@ -91,6 +91,11 @@ func TestBombPotTwoBoardsSplitPerBoard(t *testing.T) {
 		aceD, aceC, twoC,
 		// flopB: Qd Qc 2d — A: two pair K+Q, B: deuces full of queens -> B
 		queenD, queenC, twoD,
+		// turn/river for both boards: distinct blank ranks (no K/Q/2/A, no
+		// pairs) so neither boat changes. Without these, LoadedDeck fills the
+		// runout from a crypto/rand shuffle and a K or board pair boats seat 0
+		// on board 1 ~13% of runs (previously flaked in CI).
+		threeC, Card(9) /* 4h */, sixS, Card(18), /* 6d */
 	}
 	r, evs := bombAllInRunner(t, order)
 
