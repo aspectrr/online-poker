@@ -95,7 +95,14 @@ func TestBombPotTwoBoardsSplitPerBoard(t *testing.T) {
 		// pairs) so neither boat changes. Without these, LoadedDeck fills the
 		// runout from a crypto/rand shuffle and a K or board pair boats seat 0
 		// on board 1 ~13% of runs (previously flaked in CI).
+		// dealNextStreet burns per board, so post-flop draw order is:
+		// burnA, turnA, burnB, turnB, burnA, riverA, burnB, riverB. All eight
+		// pinned — burns consume any card, the four board slots are blank
+		// ranks (no K/Q/2/A, no pairing). LoadedDeck fills anything unpinned
+		// from a crypto/rand shuffle, and a K or pair on board 1 boats seat 0
+		// and flips the expected winner.
 		threeC, Card(9) /* 4h */, sixS, Card(18), /* 6d */
+		Card(12) /* 5c */, Card(21) /* 7h */, Card(14) /* 5d */, Card(25), /* 8h */
 	}
 	r, evs := bombAllInRunner(t, order)
 
