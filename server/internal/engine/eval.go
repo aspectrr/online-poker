@@ -56,94 +56,22 @@ func EvaluatePLO(hole [4]Card, board [5]Card) uint32 {
 // eval5: value = category<<26 | r0<<22 | r1<<18 | ... (4 bits/rank, 5 ranks).
 // Categories: 8=straight flush, 7=quads, 6=full house, 5=flush, 4=straight,
 // 3=trips, 2=two pair, 1=pair, 0=high card.
+// Backed by prime-product lookup tables (see evaltables.go) — ~10x faster
+// than the analytical version, which survives as eval5Analytical (used to
+// generate the tables at init).
 func eval5(c [5]Card) uint32 {
-	var rankCounts [13]uint8
-	var suitCounts [4]uint8
+	if s := c[0].Suit(); c[1].Suit() == s && c[2].Suit() == s && c[3].Suit() == s && c[4].Suit() == s {
+		prod := uint32(1)
+		for _, card := range c {
+			prod *= rankPrimes[card.Rank()]
+		}
+		return flushLookup[prod]
+	}
+	prod := uint32(1)
 	for _, card := range c {
-		rankCounts[card.Rank()]++
-		suitCounts[card.Suit()]++
+		prod *= rankPrimes[card.Rank()]
 	}
-
-	flush := false
-	for _, n := range suitCounts {
-		if n == 5 {
-			flush = true
-		}
-	}
-
-	// distinct ranks ordered by count desc, then rank desc
-	// (so quads/full-house/two-pair put the significant rank first
-	// even when a singleton kicker outranks it)
-	var ranks []int
-	for cnt := uint8(4); cnt >= 1; cnt-- {
-		for r := 12; r >= 0; r-- {
-			if rankCounts[r] == cnt {
-				ranks = append(ranks, r)
-			}
-		}
-	}
-
-	// straight detection (wheel-aware). Returns top rank of straight or -1.
-	straightHigh := func() int {
-		if len(ranks) != 5 {
-			return -1
-		}
-		// ranks descending consecutive?
-		if ranks[0]-ranks[4] == 4 {
-			return ranks[0]
-		}
-		// wheel: A-5 (A=12, 5=3, 4=2, 3=1, 2=0) -> top is 5 (rank 3)
-		if ranks[0] == 12 && ranks[1] == 3 && ranks[2] == 2 && ranks[3] == 1 && ranks[4] == 0 {
-			return 3
-		}
-		return -1
-	}()
-
-	var cat int
-	var tb [5]int // tiebreakers, most significant first
-	switch {
-	case flush && straightHigh >= 0:
-		cat = 8
-		tb[0] = straightHigh
-	case rankCounts[ranks[0]] == 4:
-		cat = 7
-		tb[0] = ranks[0]
-		tb[1] = ranks[1]
-	case rankCounts[ranks[0]] == 3 && rankCounts[ranks[1]] == 2:
-		cat = 6
-		tb[0] = ranks[0]
-		tb[1] = ranks[1]
-	case flush:
-		cat = 5
-		copy(tb[:], ranks)
-	case straightHigh >= 0:
-		cat = 4
-		tb[0] = straightHigh
-	case rankCounts[ranks[0]] == 3:
-		cat = 3
-		tb[0] = ranks[0]
-		tb[1] = ranks[1]
-		tb[2] = ranks[2]
-	case rankCounts[ranks[0]] == 2 && rankCounts[ranks[1]] == 2:
-		cat = 2
-		tb[0] = ranks[0]
-		tb[1] = ranks[1]
-		tb[2] = ranks[2]
-	case rankCounts[ranks[0]] == 2:
-		cat = 1
-		tb[0] = ranks[0]
-		copy(tb[1:3], ranks[1:3])
-		tb[3] = ranks[3]
-	default: // high card
-		cat = 0
-		copy(tb[:], ranks)
-	}
-
-	v := uint32(cat) << 26
-	for i := 0; i < 5; i++ {
-		v |= uint32(tb[i]&0xF) << uint(22-4*i)
-	}
-	return v
+	return unsuitedLookup[prod]
 }
 
 // HandCategoryName for events/notes.
