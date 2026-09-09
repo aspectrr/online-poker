@@ -195,6 +195,9 @@ function OpponentChip(props: {
       </div>
 
       <div class="mt-0.5 flex items-center gap-1">
+        <Show when={s().emoji}>
+          <span aria-hidden="true">{s().emoji}</span>
+        </Show>
         <span class="truncate text-[11px] font-semibold text-fg">{s().player}</span>
         <Show when={isButton()}>
           <span class="grid size-3.5 shrink-0 place-items-center rounded-full bg-white text-[8px] font-bold text-black shadow">

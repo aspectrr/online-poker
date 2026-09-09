@@ -29,6 +29,7 @@ func (t *Table) leave(c *ws.Client) {
 	}
 	s.userID = ""
 	s.name = ""
+	s.emoji = ""
 	s.conn = nil
 	s.stack = 0
 	s.pendingTopUp = 0
@@ -112,6 +113,7 @@ func (t *Table) seatsWire() []protocol.SeatWire {
 			Seat:       s.seat,
 			Player:     s.name,
 			UserID:     s.userID,
+			Emoji:      s.emoji,
 			Stack:      s.stack,
 			InHand:     s.inHand,
 			Folded:     s.folded,

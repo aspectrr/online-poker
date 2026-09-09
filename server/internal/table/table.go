@@ -37,6 +37,7 @@ type seat struct {
 	seat       int
 	userID     string // "" = open
 	name       string
+	emoji      string // profile tag shown on the nameplate
 	stack      int64
 	inHand     bool
 	folded     bool
@@ -414,6 +415,10 @@ func (t *Table) handle(in inbox) {
 		t.action(in.client, in.msg)
 	case "chat":
 		t.chat(in.client, in.msg)
+	case "emote":
+		t.emote(in.client, in.msg)
+	case "set_tag":
+		t.setTag(in.client, in.msg)
 	case "rabbit":
 		rabbitReveal(t, in)
 	case "bomb_pot":

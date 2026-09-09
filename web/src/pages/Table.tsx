@@ -12,13 +12,14 @@ import {
 import { useParams, A, useLocation } from "@solidjs/router";
 import { provideTable, BUTTON_TRAVEL_MS } from "../stores/table";
 import { createDemoTable } from "../stores/demoTable";
-import type { TableStore, UICard } from "../lib/protocol";
+import type { EmoteFlight, TableStore, UICard } from "../lib/protocol";
 import { Seat } from "../components/table/Seat";
 import { ChipStack } from "../components/table/ChipStack";
 import { JoinModal } from "../components/table/JoinModal";
 import { TableCenter } from "../components/table/TableCenter";
 import { TableMobile } from "../components/table/TableMobile";
 import { ActionBar } from "../components/table/ActionBar";
+import { EmotePicker } from "../components/table/EmotePicker";
 import { SettingsDrawer } from "../components/table/SettingsDrawer";
 import { HistoryDrawer } from "../components/table/HistoryDrawer";
 import { Card } from "../components/cards/Card";
@@ -265,6 +266,11 @@ export function TablePage() {
           </span>
         </div>
         <div class="flex items-center gap-3">
+          <EmotePicker
+            tag={t().seats[t().heroSeat]?.emoji ?? ""}
+            onEmote={(e) => store.sendEmote(e)}
+            onSetTag={(e) => store.setTag(e)}
+          />
           <span class="text-xs tabular-nums text-fg-muted">
             <Show when={t().handNo > 0}>
               <span class="min-[420px]:inline hidden">hand #{t().handNo} · </span>
@@ -421,6 +427,12 @@ export function TablePage() {
           </Show>
         </div>
       </Show>
+
+      {/* flying emotes: full-viewport overlay, above the felt, under the
+          header banners — one emoji per flight, auto-removed by the store */}
+      <div class="pointer-events-none fixed inset-0 z-30 overflow-hidden" aria-hidden="true">
+        <For each={store.emotes}>{(e) => <FlyingEmote emote={e} />}</For>
+      </div>
 
       {/* table area — phones get the compact layout; desktop/tablet the felt design box */}
       <main class="relative flex min-h-0 flex-1 items-center justify-center p-2 sm:p-6">
@@ -641,6 +653,34 @@ export function TablePage() {
           onClose={() => setSpectating(true)}
         />
       </Show>
+    </div>
+  );
+}
+
+/** Flying emote: one emoji gliding across the viewport in a pseudo-random
+ *  lane (derived from the flight id — deterministic per mount, no re-roll on
+ *  re-render). --x0/--x1 set the horizontal endpoints, --wob the mid-flight
+ *  bob. */
+function FlyingEmote(props: { emote: EmoteFlight }) {
+  const id = props.emote.id;
+  const ltr = id % 2 === 0;
+  const style = {
+    top: `${12 + ((id * 37) % 52)}vh`, // lanes 12..64vh, clear of the action bar
+    animation: `emote-fly ${(4 + (id % 3) * 0.7).toFixed(1)}s ease-in-out forwards`,
+    "--x0": ltr ? "-14vw" : "108vw",
+    "--x1": ltr ? "108vw" : "-14vw",
+    "--wob": `${((id % 5) - 2) * 3}vh`,
+  } as const;
+  return (
+    <div class="absolute left-0" style={style}>
+      <div class="flex flex-col items-center gap-0.5">
+        <span class="text-6xl drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)]">{props.emote.emoji}</span>
+        <Show when={props.emote.player}>
+          <span class="rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-semibold text-white/90">
+            {props.emote.player}
+          </span>
+        </Show>
+      </div>
     </div>
   );
 }

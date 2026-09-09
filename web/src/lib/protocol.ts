@@ -39,6 +39,7 @@ export type SeatWire = {
   seat: number;
   player?: string;
   user_id?: string;
+  emoji?: string;
   stack?: number;
   in_hand?: boolean;
   folded?: boolean;
@@ -136,6 +137,12 @@ export type GameEvent = {
 
 export type ChatMsg = { seat: number; player: string; text: string };
 
+/** One flying emote (ServerMsg `emote`). seat -1 = spectator. */
+export type EmoteMsg = { seat: number; player?: string; text: string };
+
+/** Client-side flight: transient, lives on the store (like toasts). */
+export type EmoteFlight = { id: number; seat: number; player: string; emoji: string };
+
 export type PostHandPrompt = { seat: number; bounty: boolean; rabbit: boolean; reveal: boolean };
 
 /** One lobby row (ServerMsg `lobby` — the live tables list, wire case). */
@@ -156,6 +163,8 @@ export type ClientMsg =
   | { type: "leave" }
   | { type: "action"; kind: "fold" | "check" | "call" | "bet" | "stay" | "drop"; amount?: number }
   | { type: "chat"; text: string }
+  | { type: "emote"; text: string } // one emoji, flies across every screen
+  | { type: "set_tag"; text: string } // profile emoji on the nameplate ("" clears)
   | { type: "rabbit"; reveal?: boolean }
   | { type: "bomb_pot" }
   | { type: "texas_drop" }
@@ -168,6 +177,7 @@ export type ServerMsg =
   | { type: "event"; event: GameEvent }
   | { type: "seats"; seats: SeatWire[] }
   | { type: "chat"; chat: ChatMsg }
+  | { type: "emote"; emote: EmoteMsg }
   | { type: "action_required"; legal: LegalActionsWire }
   | { type: "post_hand"; post: PostHandPrompt }
   | { type: "lobby"; lobby: LobbyTableWire[] }
@@ -208,6 +218,8 @@ export const cardText = (cs: Card[] | undefined): string =>
 export type SeatState = {
   seat: number;
   player: string;
+  /** profile emoji tag pinned next to the name */
+  emoji?: string;
   stackCents: number;
   sittingOut: boolean;
   inHand: boolean;
@@ -254,6 +266,7 @@ export const uiLegal = (la: LegalActionsWire): LegalActions => ({
 export const uiSeat = (s: SeatWire): SeatState => ({
   seat: s.seat,
   player: s.player ?? "",
+  emoji: s.emoji || undefined,
   stackCents: s.stack ?? 0,
   sittingOut: s.sitting_out ?? false,
   inHand: s.in_hand ?? false,
@@ -393,5 +406,11 @@ export type TableStore = {
   readonly lastError: string | null;
   /** Transient toasts (7-2 bounty, bomb pot, …). */
   readonly toasts: { id: number; text: string; kind?: "gold" | "rabbit" }[];
+  /** In-flight flying emotes (auto-removed after the flight). */
+  readonly emotes: EmoteFlight[];
+  /** Fly one emoji across every screen at this table. */
+  sendEmote(emoji: string): void;
+  /** Set / clear ("") the emoji pinned next to your name. */
+  setTag(emoji: string): void;
   dispose(): void;
 };
