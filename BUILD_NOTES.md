@@ -60,7 +60,7 @@ In Go (`TableConfig.Validate`), not SQL — engine consumes it, error messages s
 - `bomb_pot_mode`: off | manual | trigger (default off); trigger mode requires ≥1 trigger
 - triggers: rank 2–14 required, suit 0–3 or null, color red|black or null
 - `seven_deuce_bounty`, `bomb_pot_antes`: ≥ 0
-- `max_seats`: 1–22, default 9 (default applied in `ApplyDefaults`, so 0 is valid input)
+- `max_seats`: 1–9, default 9 (default applied in `ApplyDefaults`, so 0 is valid input)
 - `ApplyDefaults` fills rit/bomb_pot_mode/max_seats so callers can send partial config; call before `Validate`.
 
 ## Not touched
