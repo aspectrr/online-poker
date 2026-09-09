@@ -95,8 +95,8 @@ func (c *TableConfig) Validate() error {
 	if c.MaxSeats <= 0 {
 		return fmt.Errorf("max_seats must be positive, got %d", c.MaxSeats)
 	}
-	if c.MaxSeats > 22 {
-		return fmt.Errorf("max_seats must be <= 22, got %d", c.MaxSeats)
+	if c.MaxSeats > 9 {
+		return fmt.Errorf("max_seats must be <= 9, got %d", c.MaxSeats)
 	}
 	return nil
 }
