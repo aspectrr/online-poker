@@ -2,7 +2,7 @@ package protocol
 
 // ClientMsg is everything a client can send. Exactly one command per msg.
 type ClientMsg struct {
-	Type   string `json:"type"` // join | leave | action | chat | rabbit | bomb_pot | texas_drop | dev_deal | top_up
+	Type   string `json:"type"` // join | leave | action | chat | rabbit | bomb_pot | texas_drop | dev_deal | top_up | emote | set_tag
 	Seat   int    `json:"seat,omitempty"`
 	Name   string `json:"name,omitempty"`
 	Stack  int64  `json:"stack,omitempty"` // join: requested buy-in in cents (clamped server-side)
@@ -15,10 +15,11 @@ type ClientMsg struct {
 
 // ServerMsg is everything the server sends. Exactly one payload is set.
 type ServerMsg struct {
-	Type  string          `json:"type"` // state | event | error | chat | seats | action_required | post_hand | lobby
+	Type  string          `json:"type"` // state | event | error | chat | seats | action_required | post_hand | lobby | emote
 	State *TableState     `json:"state,omitempty"`
 	Event *Event          `json:"event,omitempty"`
 	Chat  *ChatMsg        `json:"chat,omitempty"`
+	Emote *EmoteMsg       `json:"emote,omitempty"`
 	Seats []SeatWire      `json:"seats,omitempty"`
 	Legal *LegalActions   `json:"legal,omitempty"` // type=action_required, to the actor
 	Post  *PostHandPrompt `json:"post,omitempty"`  // type=post_hand, to the winner
@@ -97,6 +98,7 @@ type SeatWire struct {
 	Seat       int    `json:"seat"`
 	Player     string `json:"player,omitempty"` // empty = open
 	UserID     string `json:"user_id,omitempty"`
+	Emoji      string `json:"emoji,omitempty"` // profile tag shown on the nameplate
 	Stack      int64  `json:"stack,omitempty"`
 	InHand     bool   `json:"in_hand,omitempty"`
 	Folded     bool   `json:"folded,omitempty"`
@@ -111,6 +113,13 @@ type SeatWire struct {
 type ChatMsg struct {
 	Seat   int    `json:"seat"`
 	Player string `json:"player"`
+	Text   string `json:"text"`
+}
+
+// EmoteMsg: one emoji broadcast to the table (flies across every screen).
+type EmoteMsg struct {
+	Seat   int    `json:"seat"` // -1 = spectator
+	Player string `json:"player,omitempty"`
 	Text   string `json:"text"`
 }
 

@@ -221,6 +221,11 @@ export function Seat(props: {
                   s().isWinner ? "text-black" : props.isHero ? "text-accent" : "text-fg",
                 )}
               >
+                <Show when={s().emoji}>
+                  <span class="mr-0.5" aria-hidden="true">
+                    {s().emoji}
+                  </span>
+                </Show>
                 {props.isHero ? "you" : s().player}
               </span>
             </div>

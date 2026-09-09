@@ -264,3 +264,26 @@
 .peek-hint {
   animation: peek-hint-pulse 1.6s ease-in-out infinite;
 }
+
+/* flying emote: one emoji glides across the viewport. --x0/--x1 = endpoints,
+   --wob = mid-flight vertical bob; endpoints come from the flight id so each
+   emote gets its own lane + direction (see FlyingEmote in pages/Table.tsx). */
+@keyframes emote-fly {
+  0% {
+    transform: translate3d(var(--x0), 0, 0) scale(0.5);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  50% {
+    transform: translate3d(calc((var(--x0) + var(--x1)) / 2), var(--wob, 0vh), 0) scale(1.45);
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--x1), 0, 0) scale(0.8);
+    opacity: 0;
+  }
+}

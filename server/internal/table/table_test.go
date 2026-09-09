@@ -315,3 +315,70 @@ func TestJoinStack(t *testing.T) {
 		t.Fatalf("huge stack = %d, want 100000", got)
 	}
 }
+
+// TestEmoteAndTag: emotes relay to everyone (spectators included, seat -1);
+// set_tag updates the seat's emoji in the seats wire; oversize/invalid
+// payloads clear the tag instead of storing garbage.
+func TestEmoteAndTag(t *testing.T) {
+	tbl := testTable(t, 0, 300)
+	a := connect(t, tbl, "userA", 0)
+	b := connect(t, tbl, "userB", 1)
+
+	// flying emote: both seated clients get it, tagged with the sender's seat
+	tbl.Send(a, protocol.ClientMsg{Type: "emote", Text: "🔥"})
+	waitProcessed(t, tbl)
+	seen := 0
+	for _, m := range drain(a) {
+		if m.Type == "emote" && m.Emote != nil {
+			seen++
+			if m.Emote.Seat != 0 || m.Emote.Text != "🔥" {
+				t.Fatalf("emote = %+v, want seat 0 🔥", m.Emote)
+			}
+		}
+	}
+	if seen != 1 {
+		t.Fatalf("sender saw %d emotes, want 1", seen)
+	}
+	found := false
+	for _, m := range drain(b) {
+		if m.Type == "emote" && m.Emote != nil && m.Emote.Seat == 0 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("other client never received the emote")
+	}
+
+	// profile tag: emoji lands on the seat wire for everyone
+	tbl.Send(a, protocol.ClientMsg{Type: "set_tag", Text: "💀"})
+	waitProcessed(t, tbl)
+	for _, m := range drain(b) {
+		if m.Type == "seats" {
+			if got := m.Seats[0].Emoji; got != "💀" {
+				t.Fatalf("seats[0].emoji = %q, want 💀", got)
+			}
+		}
+	}
+
+	// oversize payload = invalid = clears the tag
+	tbl.Send(a, protocol.ClientMsg{Type: "set_tag", Text: "123456789"})
+	waitProcessed(t, tbl)
+	if got := tbl.seatByNo(0).emoji; got != "" {
+		t.Fatalf("oversize tag stored %q, want cleared", got)
+	}
+	if got := sanitizeEmoji("\x07x"); got != "" {
+		t.Fatalf("control-rune emoji accepted: %q", got)
+	}
+
+	// spectator emote: relayed with seat -1
+	sp := ws.NewTestClient("watcher")
+	tbl.Attach(sp)
+	waitProcessed(t, tbl)
+	tbl.Send(sp, protocol.ClientMsg{Type: "emote", Text: "👀"})
+	waitProcessed(t, tbl)
+	for _, m := range drain(b) {
+		if m.Type == "emote" && m.Emote != nil && m.Emote.Seat != -1 {
+			t.Fatalf("spectator emote seat = %d, want -1", m.Emote.Seat)
+		}
+	}
+}

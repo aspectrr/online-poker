@@ -3,6 +3,7 @@ package table
 import (
 	"encoding/json"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/aspectrr/online-poker/server/internal/engine"
@@ -756,6 +757,61 @@ func (t *Table) chat(c *ws.Client, m protocol.ClientMsg) {
 	for cl := range t.clients {
 		cl.TrySend(protocol.ServerMsg{Type: "chat", Chat: &cm})
 	}
+}
+
+// ---- emotes / profile tags ----
+
+// maxEmoteRunes: cap a tag/emote payload at 8 runes — enough for one
+// multi-codepoint emoji (family/skin-tone sequences), short enough to
+// keep nameplates one line. Friends-only table; no emoji whitelist —
+// the rune cap + printable filter is the whole gate (like chat).
+const maxEmoteRunes = 8
+
+// sanitizeEmoji: printable, trimmed, 0 or 1..8 runes; "" = invalid.
+func sanitizeEmoji(in string) string {
+	in = strings.TrimSpace(in)
+	rs := []rune(in)
+	if len(rs) == 0 || len(rs) > maxEmoteRunes {
+		return ""
+	}
+	for _, r := range rs {
+		if r < 32 || r == 127 {
+			return ""
+		}
+	}
+	return in
+}
+
+// emote: relay one emoji to every screen — it flies across the table.
+func (t *Table) emote(c *ws.Client, m protocol.ClientMsg) {
+	e := sanitizeEmoji(m.Text)
+	if e == "" {
+		return
+	}
+	em := protocol.EmoteMsg{Seat: -1, Text: e}
+	if s := t.seatOfClient(c); s != nil {
+		em.Seat = s.seat
+		em.Player = s.name
+	}
+	for cl := range t.clients {
+		cl.TrySend(protocol.ServerMsg{Type: "emote", Emote: &em})
+	}
+}
+
+// setTag: choose the emoji shown next to your name on the nameplate.
+// Empty payload clears the tag.
+func (t *Table) setTag(c *ws.Client, m protocol.ClientMsg) {
+	s := t.seatOfClient(c)
+	if s == nil {
+		c.TrySend(protocol.ServerMsg{Type: "error", Error: "take a seat first"})
+		return
+	}
+	e := sanitizeEmoji(m.Text) // invalid runes just clear it
+	if e == s.emoji {
+		return
+	}
+	s.emoji = e
+	t.broadcastSeats()
 }
 
 // rabbit / post-hand decisions (called from dispatch).

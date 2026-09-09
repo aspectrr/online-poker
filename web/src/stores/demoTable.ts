@@ -5,8 +5,10 @@
  * delays. 'hero' steps park the cursor until send() (or timeout auto-check).
  * ponytail: scripted theater, not an engine.
  */
+import { createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import type {
+  EmoteFlight,
   LegalActions,
   PlayerAction,
   SeatState,
@@ -172,6 +174,14 @@ export function createDemoTable(tableId: string): TableStore {
     dealDone: true,
   });
   const [err, setErr] = createStore({ lastError: null as string | null });
+  // flying emotes: purely local in the demo (no server to relay)
+  const [emotes, setEmotes] = createSignal<EmoteFlight[]>([]);
+  let emoteSeq = 0;
+  const sendEmote = (emoji: string) => {
+    const id = ++emoteSeq;
+    setEmotes((es) => [...es.slice(-9), { id, seat: HERO, player: "you", emoji }]);
+    later(() => setEmotes((es) => es.filter((x) => x.id !== id)), 5400);
+  };
 
   const stack = (s: number) => state.seats[s].stackCents;
   const bet = (s: number) => state.seats[s].betCents;
@@ -369,6 +379,11 @@ export function createDemoTable(tableId: string): TableStore {
     get toasts() {
       return [] as { id: number; text: string; kind?: "gold" | "rabbit" }[];
     },
+    get emotes() {
+      return emotes();
+    },
+    sendEmote,
+    setTag: (emoji) => setState("seats", HERO, "emoji", emoji || undefined),
     send,
     joinSeat: () => {}, // demo seats everyone up front
     get me() {

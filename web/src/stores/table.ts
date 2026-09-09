@@ -1,4 +1,4 @@
-import { createSignal, onCleanup } from "solid-js";
+import { createEffect, createSignal, on, onCleanup } from "solid-js";
 import { TableSocket, tableWsUrl } from "../lib/ws";
 import { authIdentity, rememberGuestName } from "../lib/identity";
 import {
@@ -10,6 +10,7 @@ import {
   uiSeat,
   type ConnectionStatus,
   type GameEvent,
+  type EmoteFlight,
   type LegalActionsWire,
   type PlayerAction,
   type SeatWire,
@@ -22,6 +23,8 @@ import {
 import { money } from "../lib/money";
 
 const API_URL = import.meta.env.VITE_API_URL as string | undefined;
+
+const savedTag = () => localStorage.getItem("rr:tag") ?? "";
 
 /** Dealer-chip travel time; dealing waits for it when the button moves. */
 export const BUTTON_TRAVEL_MS = 700;
@@ -111,6 +114,8 @@ function createTableStore(tableId: string): TableStore {
   const [toasts, setToasts] = createSignal<
     { id: number; text: string; kind?: "gold" | "rabbit" }[]
   >([]);
+  const [emotes, setEmotes] = createSignal<EmoteFlight[]>([]);
+  let emoteId = 0;
 
   let sock: TableSocket | null = null;
   let me: { name: string; isGuest: boolean } | null = null;
@@ -146,6 +151,16 @@ function createTableStore(tableId: string): TableStore {
     if (kind) {
       bannerTimer = setTimeout(() => patch({ banner: null }), 5000);
     }
+  };
+
+  /** Push a flying emote; auto-remove when its flight ends (~5s). */
+  const pushEmote = (m: { seat: number; player?: string; text: string }) => {
+    const id = ++emoteId;
+    setEmotes((es) => [
+      ...es.slice(-9),
+      { id, seat: m.seat, player: m.player ?? "", emoji: m.text },
+    ]);
+    setTimeout(() => setEmotes((es) => es.filter((x) => x.id !== id)), 5400);
   };
 
   /**
@@ -212,6 +227,9 @@ function createTableStore(tableId: string): TableStore {
         break;
       case "event":
         applyEvent(m.event);
+        break;
+      case "emote":
+        pushEmote(m.emote);
         break;
       case "action_required":
         setState((s) => {
@@ -768,6 +786,28 @@ function createTableStore(tableId: string): TableStore {
     // already in a hand between deal + hand_started? apply to next hand
   };
 
+  // profile tag: remembered client-side, re-applied once seated (the seat
+  // forgets it on stand-up / server restart)
+  let tagSent = false;
+  createEffect(
+    on(
+      () => state().heroSeat,
+      (seat) => {
+        if (seat >= 0 && !tagSent) {
+          tagSent = true;
+          const tag = savedTag();
+          if (tag) sock?.send({ type: "set_tag", text: tag });
+        }
+      },
+    ),
+  );
+  const setTag = (emoji: string) => {
+    localStorage.setItem("rr:tag", emoji);
+    tagSent = true;
+    sock?.send({ type: "set_tag", text: emoji });
+  };
+  const sendEmote = (emoji: string) => sock?.send({ type: "emote", text: emoji });
+
   onCleanup(() => {
     clearDealTimers();
     if (retryTimer !== null) window.clearTimeout(retryTimer);
@@ -786,6 +826,8 @@ function createTableStore(tableId: string): TableStore {
     armTexasDrop,
     topUp,
     devDeal,
+    sendEmote,
+    setTag,
     get me() {
       return me;
     },
@@ -797,6 +839,9 @@ function createTableStore(tableId: string): TableStore {
     },
     get toasts() {
       return toasts();
+    },
+    get emotes() {
+      return emotes();
     },
     dispose: () => sock?.close(),
   };
